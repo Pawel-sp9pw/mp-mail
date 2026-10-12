@@ -5,10 +5,11 @@ Aplikacja Windows do codziennej wysyłki dokumentów do firm przez SMTP. Jest to
 ## Najważniejsze funkcje
 
 - konfiguracja firm: nazwa, e-mail, temat, indywidualna treść, katalog dokumentów, hasło ZIP, aktywna/nieaktywna;
-- automatyczne tworzenie ZIP AES-256 z całej zawartości katalogu firmy;
+- automatyczne tworzenie ZIP AES-256 z całej bieżącej zawartości katalogu firmy (zawsze z pominięciem katalogu `archiwum`);
 - SMTP STARTTLS / SSL/TLS, test połączenia i retry;
 - podgląd przed wysyłką i zabezpieczenie przed duplikatami w danym dniu;
 - harmonogram codzienny przez Harmonogram zadań Windows;
+- po potwierdzonej poprawnej wysyłce przeniesienie wysłanych plików do `archiwum/<okres>/` pod katalogiem danej firmy;
 - historia wysyłek;
 - import i eksport listy firm do CSV.
 
@@ -34,7 +35,7 @@ Zadanie uruchamia `MpMail.exe --scheduled`:
 - codziennie o skonfigurowanej godzinie;
 - przy logowaniu użytkownika.
 
-Codziennie po osiągnięciu skonfigurowanej godziny aplikacja wysyła dokumenty do aktywnych firm. Jeśli komputer był wyłączony o tej godzinie, uruchomienie zadania przy późniejszym logowaniu może wykonać wysyłkę tego samego dnia. Firma, która ma już status Wysłano lub Niepewny dla danego dnia, nie jest automatycznie wysyłana ponownie.
+Codziennie po osiągnięciu skonfigurowanej godziny aplikacja wysyła dokumenty do aktywnych firm. Jeśli komputer był wyłączony o tej godzinie, uruchomienie zadania przy późniejszym logowaniu może wykonać wysyłkę tego samego dnia. Firma, która ma już status Wysłano lub Niepewny dla danego dnia, nie jest automatycznie wysyłana ponownie. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<RRRR-MM-DD>/`. Katalog `archiwum` i jego podkatalogi nigdy nie są brane pod uwagę przy kolejnych paczkach.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -43,6 +44,7 @@ Testy automatyczne sprawdzają:
 - jedną wysyłkę na firmę dziennie;
 - brak wysyłki przed ustawioną godziną;
 - ponowną wysyłkę następnego dnia;
+- przeniesienie wysłanych plików do archiwum oraz pomijanie archiwum przy pakowaniu;
 - import/eksport CSV, cytowanie pól i nieeksportowanie hasła ZIP.
 
 ## Dane aplikacji
@@ -58,9 +60,9 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.2.0
+.\build.ps1 -Version 0.3.0
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.2.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.3.0-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.

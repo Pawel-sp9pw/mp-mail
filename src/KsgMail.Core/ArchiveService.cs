@@ -25,6 +25,8 @@ public sealed class PreparedBatch(AppSettings settings, string directory) : IDis
 
 public sealed class ArchiveService(ISecretProtector secrets)
 {
+    public const string SentArchiveDirectoryName = "archiwum";
+
     public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes)
     {
         if (!Directory.Exists(directory)) throw new UserException("Katalog źródłowy nie istnieje lub jest niedostępny.");
@@ -36,7 +38,12 @@ public sealed class ArchiveService(ISecretProtector secrets)
         while (pending.TryPop(out var current))
         {
             RejectLink(current);
-            foreach (var subdirectory in Directory.EnumerateDirectories(current)) pending.Push(subdirectory);
+            foreach (var subdirectory in Directory.EnumerateDirectories(current))
+            {
+                if (Path.GetFileName(subdirectory).Equals(SentArchiveDirectoryName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                pending.Push(subdirectory);
+            }
             foreach (var path in Directory.EnumerateFiles(current))
             {
                 RejectLink(path);
@@ -49,6 +56,45 @@ public sealed class ArchiveService(ISecretProtector secrets)
         }
         if (files.Count == 0) throw new UserException("Katalog jest pusty. Wiadomość nie zostanie wysłana.");
         return files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToList();
+    }
+
+    public void ArchiveSent(string sourceDirectory, IReadOnlyList<SourceFile> files, string period)
+    {
+        if (files.Count == 0) return;
+        var root = Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var archiveRoot = Path.Combine(root, SentArchiveDirectoryName, period);
+        Directory.CreateDirectory(archiveRoot);
+
+        foreach (var file in files)
+        {
+            var source = Path.GetFullPath(file.FullPath);
+            var rootPrefix = root + Path.DirectorySeparatorChar;
+            if (!source.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                throw new UserException("Nie można zarchiwizować pliku spoza katalogu firmy.");
+            if (!File.Exists(source))
+                throw new UserException($"Nie znaleziono pliku do archiwizacji: {file.RelativePath}");
+
+            var relative = file.RelativePath.Replace('/', Path.DirectorySeparatorChar);
+            var destination = Path.Combine(archiveRoot, relative);
+            var destinationDirectory = Path.GetDirectoryName(destination)!;
+            Directory.CreateDirectory(destinationDirectory);
+            destination = UniqueDestination(destination);
+            File.Move(source, destination);
+        }
+    }
+
+    private static string UniqueDestination(string path)
+    {
+        if (!File.Exists(path)) return path;
+        var directory = Path.GetDirectoryName(path)!;
+        var name = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+        for (var i = 2; i < 10000; i++)
+        {
+            var candidate = Path.Combine(directory, $"{name} ({i}){extension}");
+            if (!File.Exists(candidate)) return candidate;
+        }
+        throw new UserException($"Nie można utworzyć unikalnej nazwy w archiwum dla pliku {Path.GetFileName(path)}.");
     }
 
     private static void RejectLink(string path)

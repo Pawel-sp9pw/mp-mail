@@ -47,12 +47,34 @@ public sealed class CoreTests
         Assert.Equal(0, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 12, 9, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
+        Assert.False(File.Exists(Path.Combine(workspace.Source, "file.txt")));
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-12", "file.txt")));
         await service.RunScheduledAsync(new DateTime(2026, 10, 12, 12, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
+        File.WriteAllText(Path.Combine(workspace.Source, "next.txt"), "next document");
         await service.RunScheduledAsync(new DateTime(2026, 10, 13, 8, 59, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 13, 9, 0, 0), CancellationToken.None);
         Assert.Equal(2, sender.Count);
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-13", "next.txt")));
+    }
+
+    [Fact]
+    public void DiscoverAlwaysExcludesArchiveDirectory()
+    {
+        using var workspace = new TestWorkspace();
+        File.WriteAllText(Path.Combine(workspace.Source, "current.txt"), "current");
+        var archive = Path.Combine(workspace.Source, "archiwum", "2026-10-11");
+        Directory.CreateDirectory(archive);
+        File.WriteAllText(Path.Combine(archive, "old.txt"), "old");
+        var nestedArchive = Path.Combine(workspace.Source, "podkatalog", "ArChIwUm");
+        Directory.CreateDirectory(nestedArchive);
+        File.WriteAllText(Path.Combine(nestedArchive, "old2.txt"), "old2");
+
+        var files = new ArchiveService(workspace.Secrets).Discover(workspace.Source, 10 * 1048576L);
+
+        var file = Assert.Single(files);
+        Assert.Equal("current.txt", file.RelativePath);
     }
 
     [Fact]
