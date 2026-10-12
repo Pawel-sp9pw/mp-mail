@@ -8,7 +8,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         Validation.Settings(settings);
-        if (!DateOnly.TryParseExact(period + "-01", "yyyy-MM-dd", out _)) throw new UserException("Niepoprawny okres wysyłki.");
+        var validMonth = DateOnly.TryParseExact(period + "-01", "yyyy-MM-dd", out _);
+        var validDay = DateOnly.TryParseExact(period, "yyyy-MM-dd", out _);
+        if (!validMonth && !validDay) throw new UserException("Niepoprawny okres wysyłki.");
         var directory = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var batch = new PreparedBatch(settings, directory);
@@ -92,7 +94,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
     {
         var settings = repository.Settings();
         if (!settings.IsDue(localNow)) return;
-        var period = localNow.ToString("yyyy-MM");
+        var period = localNow.ToString("yyyy-MM-dd");
         var customers = repository.Customers().Where(customer => customer.Active && !repository.IsBlocked(customer.Id, period)).ToList();
         if (customers.Count == 0) return;
         using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken);
