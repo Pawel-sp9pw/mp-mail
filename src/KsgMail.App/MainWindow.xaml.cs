@@ -154,7 +154,6 @@ public partial class MainWindow : Window
         SourceLimit.Text = settings.MaxSourceMb.ToString(CultureInfo.InvariantCulture);
         RetryCount.Text = settings.RetryCount.ToString(CultureInfo.InvariantCulture);
         ScheduleEnabled.IsChecked = settings.ScheduleEnabled;
-        ScheduleDay.Text = settings.ScheduleDay.ToString(CultureInfo.InvariantCulture);
         ScheduleTime.Text = settings.ScheduleTime;
     }
 
@@ -176,7 +175,7 @@ public partial class MainWindow : Window
             SenderEmail = SenderEmail.Text.Trim(), SenderName = SenderName.Text.Trim(),
             MaxAttachmentMb = Number(AttachmentLimit, "Limit ZIP"), MaxSourceMb = Number(SourceLimit, "Limit plików"),
             RetryCount = Number(RetryCount, "Liczba prób"), ScheduleEnabled = ScheduleEnabled.IsChecked == true,
-            ScheduleDay = Number(ScheduleDay, "Dzień"), ScheduleTime = ScheduleTime.Text.Trim()
+            ScheduleTime = ScheduleTime.Text.Trim()
         };
         Validation.Settings(result);
         return result;
@@ -318,13 +317,13 @@ public partial class MainWindow : Window
         operation = new CancellationTokenSource();
         try
         {
-            StatusText.Text = "Sprawdzanie miesięcznej wysyłki automatycznej…";
+            StatusText.Text = "Sprawdzanie codziennej wysyłki automatycznej…";
             await batches.RunScheduledAsync(DateTime.Now, operation.Token);
             StatusText.Text = "Sprawdzono harmonogram. Wyniki są w historii.";
         }
         catch (Exception exception)
         {
-            repository.Log(new Customer { Name = "Harmonogram" }, DateTime.Now.ToString("yyyy-MM"),
+            repository.Log(new Customer { Name = "Harmonogram" }, DateTime.Now.ToString("yyyy-MM-dd"),
                 DeliveryStatus.Failed, ErrorMessages.Describe(exception));
             StatusText.Text = ErrorMessages.Describe(exception);
         }
