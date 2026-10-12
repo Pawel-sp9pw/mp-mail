@@ -1,14 +1,14 @@
 # Wysyłka masowa z medycyny pracy (MP Mail)
 
-Aplikacja Windows do miesięcznej wysyłki dokumentów do firm przez SMTP. Jest to osobna wersja projektu `ksg-mail`, z niezależną bazą danych i niezależnym zadaniem Harmonogramu Windows.
+Aplikacja Windows do codziennej wysyłki dokumentów do firm przez SMTP. Jest to osobna wersja projektu `ksg-mail`, z niezależną bazą danych i niezależnym zadaniem Harmonogramu Windows.
 
 ## Najważniejsze funkcje
 
 - konfiguracja firm: nazwa, e-mail, temat, indywidualna treść, katalog dokumentów, hasło ZIP, aktywna/nieaktywna;
 - automatyczne tworzenie ZIP AES-256 z całej zawartości katalogu firmy;
 - SMTP STARTTLS / SSL/TLS, test połączenia i retry;
-- podgląd przed wysyłką i zabezpieczenie przed duplikatami w danym miesiącu;
-- harmonogram miesięczny przez Harmonogram zadań Windows;
+- podgląd przed wysyłką i zabezpieczenie przed duplikatami w danym dniu;
+- harmonogram codzienny przez Harmonogram zadań Windows;
 - historia wysyłek;
 - import i eksport listy firm do CSV.
 
@@ -34,15 +34,15 @@ Zadanie uruchamia `MpMail.exe --scheduled`:
 - codziennie o skonfigurowanej godzinie;
 - przy logowaniu użytkownika.
 
-Aplikacja dopiero wewnętrznie sprawdza wskazany dzień miesiąca. Jeśli komputer był wyłączony w terminie, późniejsze uruchomienie w tym samym miesiącu nadrabia wysyłkę. Firma, która ma już status Wysłano lub Niepewny dla tego okresu, nie jest automatycznie wysyłana ponownie.
+Codziennie po osiągnięciu skonfigurowanej godziny aplikacja wysyła dokumenty do aktywnych firm. Jeśli komputer był wyłączony o tej godzinie, uruchomienie zadania przy późniejszym logowaniu może wykonać wysyłkę tego samego dnia. Firma, która ma już status Wysłano lub Niepewny dla danego dnia, nie jest automatycznie wysyłana ponownie.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
 - XML zadania Windows (codzienny trigger, logowanie, `--scheduled`);
 - brak wysyłki przed terminem;
-- jedną wysyłkę na firmę w miesiącu;
-- nadrobienie po terminie;
-- przejście do kolejnego miesiąca;
+- jedną wysyłkę na firmę dziennie;
+- brak wysyłki przed ustawioną godziną;
+- ponowną wysyłkę następnego dnia;
 - import/eksport CSV, cytowanie pól i nieeksportowanie hasła ZIP.
 
 ## Dane aplikacji
