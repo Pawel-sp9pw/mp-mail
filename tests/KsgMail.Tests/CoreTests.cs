@@ -8,13 +8,14 @@ namespace KsgMail.Tests;
 public sealed class CoreTests
 {
     [Fact]
-    public void MonthlyScheduleHonorsDayTimeAndDisabledFlag()
+    public void DailyScheduleHonorsTimeAndDisabledFlag()
     {
         using var workspace = new TestWorkspace();
-        var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleDay = 12, ScheduleTime = "09:30" };
+        var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:30" };
         Assert.False(settings.IsDue(new DateTime(2026, 10, 12, 9, 29, 0)));
         Assert.True(settings.IsDue(new DateTime(2026, 10, 12, 9, 30, 0)));
-        Assert.True(settings.IsDue(new DateTime(2026, 10, 31, 23, 59, 0)));
+        Assert.False(settings.IsDue(new DateTime(2026, 10, 13, 8, 59, 0)));
+        Assert.True(settings.IsDue(new DateTime(2026, 10, 13, 9, 30, 0)));
         Assert.False((settings with { ScheduleEnabled = false }).IsDue(new DateTime(2026, 10, 12, 10, 0, 0)));
     }
 
@@ -22,7 +23,7 @@ public sealed class CoreTests
     public void WindowsTaskRunsDailyAndAtLogonWithScheduledSwitch()
     {
         using var workspace = new TestWorkspace();
-        var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleDay = 12, ScheduleTime = "07:45" };
+        var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "07:45" };
         var xml = WindowsScheduler.BuildTaskXml(settings, @"C:\Program Files\MP Mail\MpMail.exe", "S-1-5-21-test");
         XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
         Assert.Equal("2020-01-01T07:45:00", xml.Descendants(ns + "StartBoundary").Single().Value);
@@ -33,12 +34,12 @@ public sealed class CoreTests
     }
 
     [Fact]
-    public async Task ScheduledRunSendsOncePerCompanyPerMonthAndCatchesUpAfterDueTime()
+    public async Task ScheduledRunSendsOncePerCompanyPerDay()
     {
         using var workspace = new TestWorkspace();
         File.WriteAllText(Path.Combine(workspace.Source, "file.txt"), "document");
         workspace.Repository.SaveCustomer(workspace.Customer);
-        workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleDay = 12, ScheduleTime = "09:00" });
+        workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00" });
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
 
@@ -46,9 +47,11 @@ public sealed class CoreTests
         Assert.Equal(0, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 12, 9, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        await service.RunScheduledAsync(new DateTime(2026, 10, 20, 12, 0, 0), CancellationToken.None);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 12, 12, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        await service.RunScheduledAsync(new DateTime(2026, 11, 20, 12, 0, 0), CancellationToken.None);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 13, 8, 59, 0), CancellationToken.None);
+        Assert.Equal(1, sender.Count);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 13, 9, 0, 0), CancellationToken.None);
         Assert.Equal(2, sender.Count);
     }
 
