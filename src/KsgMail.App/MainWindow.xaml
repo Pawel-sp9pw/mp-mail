@@ -4,7 +4,7 @@
  <DockPanel Margin="22">
   <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
    <StackPanel><TextBlock Text="Wysyłka masowa z medycyny pracy" FontSize="28" FontWeight="SemiBold" Foreground="#173B69"/>
-    <TextBlock Text="Dokumenty dla firm · szyfrowany ZIP · miesięczna wysyłka" Foreground="#526477"/></StackPanel>
+    <TextBlock Text="Dokumenty dla firm · szyfrowany ZIP · codzienna wysyłka" Foreground="#526477"/></StackPanel>
   </Grid>
   <Border DockPanel.Dock="Bottom" Background="#E5EDF6" Padding="12" Margin="0,14,0,0">
    <DockPanel><Button x:Name="CancelButton" DockPanel.Dock="Right" Content="Anuluj operację" Click="CancelOperation" IsEnabled="False"/>
@@ -36,7 +36,7 @@
        <TextBlock Text="Adres e-mail"/><TextBox x:Name="CustomerEmail"/>
        <TextBlock Text="Temat wiadomości"/><TextBox x:Name="CustomerSubject"/>
        <TextBlock Text="Treść wiadomości"/><TextBox x:Name="CustomerBody" AcceptsReturn="True" Height="125" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
-       <TextBlock Text="Zmienne: {klient} i {miesiac}" Foreground="#526477" Margin="0,0,0,12"/>
+       <TextBlock Text="Zmienne: {klient}, {miesiac} i {data}" Foreground="#526477" Margin="0,0,0,12"/>
        <TextBlock Text="Katalog z dokumentami"/>
        <DockPanel><Button DockPanel.Dock="Right" Content="Wybierz…" Click="BrowseDirectory"/><TextBox x:Name="CustomerDirectory"/></DockPanel>
        <TextBlock x:Name="ZipPasswordLabel" Text="Hasło ZIP"/>
@@ -68,10 +68,9 @@
        <TextBlock Text="Maksymalny rozmiar plików źródłowych (MB, 1–2048)"/><TextBox x:Name="SourceLimit"/>
        <TextBlock Text="Liczba prób SMTP (1–5)"/><TextBox x:Name="RetryCount"/>
        <Separator Margin="0,14"/>
-       <CheckBox x:Name="ScheduleEnabled" Content="Włącz automatyczną wysyłkę miesięczną" Margin="0,6,0,16"/>
-       <TextBlock Text="Dzień miesiąca (1–28)"/><TextBox x:Name="ScheduleDay"/>
+       <CheckBox x:Name="ScheduleEnabled" Content="Włącz automatyczną wysyłkę codzienną" Margin="0,6,0,16"/>
        <TextBlock Text="Godzina lokalna Windows (HH:mm)"/><TextBox x:Name="ScheduleTime"/>
-       <TextBlock Text="Zadanie Windows uruchamia MP Mail codziennie o ustawionej godzinie i przy logowaniu. Aplikacja wysyła dopiero po wskazanym dniu miesiąca i nie powtarza poprawnie wysłanych wiadomości w tym samym miesiącu." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
+       <TextBlock Text="Zadanie Windows uruchamia MP Mail codziennie o ustawionej godzinie i przy logowaniu. Każda aktywna firma jest wysyłana maksymalnie raz dziennie; po ponownym uruchomieniu tego samego dnia wysyłka nie zostanie zdublowana." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
       </StackPanel>
      </Grid>
     </ScrollViewer>
