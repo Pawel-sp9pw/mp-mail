@@ -1,3 +1,4 @@
+using System.IO;
 using System.Xml.Linq;
 using KsgMail.Core;
 using Xunit;
@@ -85,7 +86,7 @@ public sealed class CoreTests
         File.WriteAllText(path,
             "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
             $";Nowa firma;new@example.test;Dokumenty;Treść;{workspace.Source};;1\n");
-        Assert.Throws<UserException>(() => CustomerCsv.Import(path, [], workspace.Secrets));
+        Assert.Throws<UserException>(() => { CustomerCsv.Import(path, [], workspace.Secrets); });
 
         File.WriteAllText(path,
             "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
