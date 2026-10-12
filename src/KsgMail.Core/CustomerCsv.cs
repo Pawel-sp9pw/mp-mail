@@ -1,0 +1,113 @@
+using System.Text;
+
+namespace KsgMail.Core;
+
+public sealed record CsvImportResult(int Added, int Updated, IReadOnlyList<Customer> Customers);
+
+public static class CustomerCsv
+{
+    public const string Header = "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny";
+
+    public static void Export(string path, IEnumerable<Customer> customers)
+    {
+        using var writer = new StreamWriter(path, false, new UTF8Encoding(true));
+        writer.WriteLine(Header);
+        foreach (var c in customers.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase))
+            writer.WriteLine(string.Join(";", Escape(c.Id), Escape(c.Name), Escape(c.Email), Escape(c.Subject),
+                Escape(c.Body), Escape(c.SourceDirectory), "", c.Active ? "1" : "0"));
+    }
+
+    public static CsvImportResult Import(string path, IReadOnlyList<Customer> existing, ISecretProtector secrets)
+    {
+        var rows = Parse(File.ReadAllText(path, Encoding.UTF8));
+        if (rows.Count == 0) throw new UserException("Plik CSV jest pusty.");
+        var header = rows[0].Select(x => x.Trim().ToLowerInvariant()).ToList();
+        string[] required = ["nazwa", "email", "temat", "tresc", "katalog", "haslo_zip", "aktywny"];
+        foreach (var name in required)
+            if (!header.Contains(name)) throw new UserException($"CSV: brak kolumny '{name}'.");
+        var byId = existing.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
+        var result = new List<Customer>();
+        int added = 0, updated = 0;
+        for (int rowNo = 1; rowNo < rows.Count; rowNo++)
+        {
+            var row = rows[rowNo];
+            if (row.All(string.IsNullOrWhiteSpace)) continue;
+            string Get(string name)
+            {
+                var index = header.IndexOf(name);
+                return index >= 0 && index < row.Count ? row[index].Trim() : "";
+            }
+            var id = Get("id");
+            Customer current;
+            if (id.Length > 0 && byId.TryGetValue(id, out var found))
+            {
+                current = found;
+                updated++;
+            }
+            else
+            {
+                current = new Customer();
+                added++;
+            }
+            var password = Get("haslo_zip");
+            var customer = current with
+            {
+                Name = Get("nazwa"),
+                Email = Get("email"),
+                Subject = Get("temat"),
+                Body = Get("tresc"),
+                SourceDirectory = Get("katalog"),
+                Active = ParseBool(Get("aktywny")),
+                ZipPasswordProtected = password.Length == 0 ? current.ZipPasswordProtected : secrets.Protect(password)
+            };
+            if (customer.ZipPasswordProtected.Length == 0)
+                throw new UserException($"CSV wiersz {rowNo + 1}: nowa firma wymaga hasła ZIP w kolumnie haslo_zip.");
+            try { Validation.Customer(customer); }
+            catch (UserException ex) { throw new UserException($"CSV wiersz {rowNo + 1}: {ex.Message}"); }
+            result.Add(customer);
+        }
+        return new CsvImportResult(added, updated, result);
+    }
+
+    private static bool ParseBool(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "1" or "true" or "tak" or "yes" => true,
+        "0" or "false" or "nie" or "no" => false,
+        _ => throw new UserException($"CSV: niepoprawna wartość aktywny '{value}'. Użyj 1/0, tak/nie albo true/false.")
+    };
+
+    private static string Escape(string value)
+    {
+        if (!value.Contains(';') && !value.Contains('"') && !value.Contains('\r') && !value.Contains('\n')) return value;
+        return """ + value.Replace(""", """") + """;
+    }
+
+    private static List<List<string>> Parse(string text)
+    {
+        var rows = new List<List<string>>();
+        var row = new List<string>();
+        var field = new StringBuilder();
+        bool quoted = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (quoted)
+            {
+                if (ch == '"' && i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; }
+                else if (ch == '"') quoted = false;
+                else field.Append(ch);
+            }
+            else
+            {
+                if (ch == '"') quoted = true;
+                else if (ch == ';') { row.Add(field.ToString()); field.Clear(); }
+                else if (ch == '\r') { }
+                else if (ch == '\n') { row.Add(field.ToString()); field.Clear(); rows.Add(row); row = new List<string>(); }
+                else field.Append(ch);
+            }
+        }
+        if (quoted) throw new UserException("CSV: niezamknięty cudzysłów.");
+        if (field.Length > 0 || row.Count > 0) { row.Add(field.ToString()); rows.Add(row); }
+        return rows;
+    }
+}
