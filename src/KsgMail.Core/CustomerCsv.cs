@@ -79,7 +79,8 @@ public static class CustomerCsv
     private static string Escape(string value)
     {
         if (!value.Contains(';') && !value.Contains('"') && !value.Contains('\r') && !value.Contains('\n')) return value;
-        return """ + value.Replace(""", """") + """;
+        var quote = ((char)34).ToString();
+        return quote + value.Replace(quote, quote + quote) + quote;
     }
 
     private static List<List<string>> Parse(string text)
