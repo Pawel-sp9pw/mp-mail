@@ -26,6 +26,7 @@ public sealed class PreparedBatch(AppSettings settings, string directory) : IDis
 public sealed class ArchiveService(ISecretProtector secrets)
 {
     public const string SentArchiveDirectoryName = "archiwum";
+    public const string SendFilePrefix = "orzeczenie-profilaktyczne-p1";
 
     public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes)
     {
@@ -46,6 +47,10 @@ public sealed class ArchiveService(ISecretProtector secrets)
             }
             foreach (var path in Directory.EnumerateFiles(current))
             {
+                var fileName = Path.GetFileName(path);
+                if (!fileName.StartsWith(SendFilePrefix, StringComparison.OrdinalIgnoreCase) ||
+                    !Path.GetExtension(fileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 RejectLink(path);
                 var info = new FileInfo(path);
                 total = checked(total + info.Length);
@@ -54,7 +59,7 @@ public sealed class ArchiveService(ISecretProtector secrets)
                 if (files.Count > 10000) throw new UserException("Katalog zawiera ponad 10 000 plików.");
             }
         }
-        if (files.Count == 0) throw new UserException("Katalog jest pusty. Wiadomość nie zostanie wysłana.");
+        if (files.Count == 0) throw new UserException("Brak plików pasujących do wzorca orzeczenie-profilaktyczne-p1*.pdf. Wiadomość nie zostanie wysłana.");
         return files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToList();
     }
 

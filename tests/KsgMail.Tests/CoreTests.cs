@@ -37,7 +37,7 @@ public sealed class CoreTests
     public async Task ScheduledRunSendsOncePerCompanyPerDay()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "file.txt"), "document");
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "document");
         workspace.Repository.SaveCustomer(workspace.Customer);
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00" });
         var sender = new RecordingSender();
@@ -47,34 +47,49 @@ public sealed class CoreTests
         Assert.Equal(0, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 12, 9, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        Assert.False(File.Exists(Path.Combine(workspace.Source, "file.txt")));
-        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-12", "file.txt")));
+        Assert.False(File.Exists(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf")));
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-12", "orzeczenie-profilaktyczne-p1-001.pdf")));
         await service.RunScheduledAsync(new DateTime(2026, 10, 12, 12, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        File.WriteAllText(Path.Combine(workspace.Source, "next.txt"), "next document");
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "next document");
         await service.RunScheduledAsync(new DateTime(2026, 10, 13, 8, 59, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 13, 9, 0, 0), CancellationToken.None);
         Assert.Equal(2, sender.Count);
-        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-13", "next.txt")));
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-13", "orzeczenie-profilaktyczne-p1-002.pdf")));
     }
 
     [Fact]
     public void DiscoverAlwaysExcludesArchiveDirectory()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "current.txt"), "current");
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.pdf"), "current");
+        File.WriteAllText(Path.Combine(workspace.Source, "inne-orzeczenie.pdf"), "other");
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p2-123.pdf"), "other");
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.txt"), "other");
         var archive = Path.Combine(workspace.Source, "archiwum", "2026-10-11");
         Directory.CreateDirectory(archive);
-        File.WriteAllText(Path.Combine(archive, "old.txt"), "old");
+        File.WriteAllText(Path.Combine(archive, "orzeczenie-profilaktyczne-p1-old.pdf"), "old");
         var nestedArchive = Path.Combine(workspace.Source, "podkatalog", "ArChIwUm");
         Directory.CreateDirectory(nestedArchive);
-        File.WriteAllText(Path.Combine(nestedArchive, "old2.txt"), "old2");
+        File.WriteAllText(Path.Combine(nestedArchive, "orzeczenie-profilaktyczne-p1-old2.pdf"), "old2");
 
         var files = new ArchiveService(workspace.Secrets).Discover(workspace.Source, 10 * 1048576L);
 
         var file = Assert.Single(files);
-        Assert.Equal("current.txt", file.RelativePath);
+        Assert.Equal("orzeczenie-profilaktyczne-p1-123.pdf", file.RelativePath);
+    }
+
+    [Fact]
+    public void DiscoverRejectsDirectoryWithoutMatchingMedicalCertificates()
+    {
+        using var workspace = new TestWorkspace();
+        File.WriteAllText(Path.Combine(workspace.Source, "other.pdf"), "other");
+        var service = new ArchiveService(workspace.Secrets);
+
+        var exception = Assert.Throws<UserException>(() => service.Discover(workspace.Source, 10 * 1048576L));
+
+        Assert.Contains("orzeczenie-profilaktyczne-p1*.pdf", exception.Message);
     }
 
     [Fact]
