@@ -31,13 +31,12 @@ public sealed record AppSettings
     public int MaxSourceMb { get; init; } = 500;
     public int RetryCount { get; init; } = 3;
     public bool ScheduleEnabled { get; init; }
-    public int ScheduleDay { get; init; } = 1;
     public string ScheduleTime { get; init; } = "09:00";
 
     public DateTime DueAt(DateTime localNow)
     {
         var time = TimeOnly.ParseExact(ScheduleTime, "HH:mm", CultureInfo.InvariantCulture);
-        return new(localNow.Year, localNow.Month, ScheduleDay, time.Hour, time.Minute, 0);
+        return new(localNow.Year, localNow.Month, localNow.Day, time.Hour, time.Minute, 0);
     }
 
     public bool IsDue(DateTime localNow) => ScheduleEnabled && localNow >= DueAt(localNow);
@@ -74,7 +73,6 @@ public static class Validation
         Require(settings.MaxAttachmentMb is >= 1 and <= 100, "Limit ZIP: 1–100 MB.");
         Require(settings.MaxSourceMb is >= 1 and <= 2048, "Limit plików źródłowych: 1–2048 MB.");
         Require(settings.RetryCount is >= 1 and <= 5, "Liczba prób SMTP: 1–5.");
-        Require(settings.ScheduleDay is >= 1 and <= 28, "Dzień miesiąca: 1–28.");
         Require(TimeOnly.TryParseExact(settings.ScheduleTime, "HH:mm", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out _), "Godzina musi mieć format HH:mm.");
     }
@@ -96,7 +94,12 @@ public sealed class UserException(string message) : Exception(message);
 
 public static class Templates
 {
-    public static string Render(string text, Customer customer, string period) =>
-        text.Replace("{klient}", customer.Name, StringComparison.Ordinal)
-            .Replace("{miesiac}", period, StringComparison.Ordinal);
+    public static string Render(string text, Customer customer, string period)
+    {
+        var month = period.Length >= 7 ? period[..7] : period;
+        var date = period.Length == 10 ? period : period + "-01";
+        return text.Replace("{klient}", customer.Name, StringComparison.Ordinal)
+            .Replace("{miesiac}", month, StringComparison.Ordinal)
+            .Replace("{data}", date, StringComparison.Ordinal);
+    }
 }
