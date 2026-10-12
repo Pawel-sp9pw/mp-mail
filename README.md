@@ -58,9 +58,9 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.1.0
+.\build.ps1 -Version 0.2.0
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.1.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.2.0-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
