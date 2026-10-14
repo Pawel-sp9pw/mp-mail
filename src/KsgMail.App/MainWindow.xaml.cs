@@ -319,9 +319,9 @@ public partial class MainWindow : Window
         operation = new CancellationTokenSource();
         try
         {
-            StatusText.Text = "Sprawdzanie codziennej wysyłki automatycznej…";
-            await batches.RunScheduledAsync(DateTime.Now, operation.Token);
-            StatusText.Text = "Sprawdzono harmonogram. Wyniki są w historii.";
+            StatusText.Text = "Sprawdzanie wysyłki zbiorczej i interwału NEG…";
+            await batches.RunAutomationsAsync(DateTime.Now, operation.Token);
+            StatusText.Text = "Sprawdzono harmonogramy. Wyniki są w historii.";
         }
         catch (Exception exception)
         {
