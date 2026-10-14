@@ -27,39 +27,34 @@ public sealed class ArchiveService(ISecretProtector secrets)
 {
     public const string SentArchiveDirectoryName = "archiwum";
     public const string SendFilePrefix = "orzeczenie-profilaktyczne-p1";
+    public const string NegativeFilePrefix = "NEG.orzeczenie-profilaktyczne-p1";
 
-    public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes)
+    public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes, bool negativeOnly = false)
     {
         if (!Directory.Exists(directory)) throw new UserException("Katalog źródłowy nie istnieje lub jest niedostępny.");
         var root = Path.GetFullPath(directory);
-        var pending = new Stack<string>();
-        pending.Push(root);
+        RejectLink(root);
         var files = new List<SourceFile>();
         long total = 0;
-        while (pending.TryPop(out var current))
+        foreach (var path in Directory.EnumerateFiles(root))
         {
-            RejectLink(current);
-            foreach (var subdirectory in Directory.EnumerateDirectories(current))
-            {
-                if (Path.GetFileName(subdirectory).Equals(SentArchiveDirectoryName, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                pending.Push(subdirectory);
-            }
-            foreach (var path in Directory.EnumerateFiles(current))
-            {
-                var fileName = Path.GetFileName(path);
-                if (!fileName.StartsWith(SendFilePrefix, StringComparison.OrdinalIgnoreCase) ||
-                    !Path.GetExtension(fileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                RejectLink(path);
-                var info = new FileInfo(path);
-                total = checked(total + info.Length);
-                if (total > maxSourceBytes) throw new UserException("Pliki źródłowe przekraczają skonfigurowany limit.");
-                files.Add(new SourceFile(path, Path.GetRelativePath(root, path).Replace('\\', '/'), info.Length, info.LastWriteTimeUtc));
-                if (files.Count > 10000) throw new UserException("Katalog zawiera ponad 10 000 plików.");
-            }
+            var fileName = Path.GetFileName(path);
+            var isPdf = Path.GetExtension(fileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+            var isNegative = fileName.StartsWith(NegativeFilePrefix, StringComparison.OrdinalIgnoreCase);
+            var isStandard = fileName.StartsWith(SendFilePrefix, StringComparison.OrdinalIgnoreCase);
+            if (!isPdf || (negativeOnly ? !isNegative : (!isStandard || isNegative))) continue;
+            RejectLink(path);
+            var info = new FileInfo(path);
+            total = checked(total + info.Length);
+            if (total > maxSourceBytes) throw new UserException("Pliki źródłowe przekraczają skonfigurowany limit.");
+            files.Add(new SourceFile(path, fileName, info.Length, info.LastWriteTimeUtc));
+            if (files.Count > 10000) throw new UserException("Katalog zawiera ponad 10 000 plików.");
         }
-        if (files.Count == 0) throw new UserException("Brak plików pasujących do wzorca orzeczenie-profilaktyczne-p1*.pdf. Wiadomość nie zostanie wysłana.");
+        if (files.Count == 0)
+        {
+            var pattern = negativeOnly ? "NEG.orzeczenie-profilaktyczne-p1*.pdf" : "orzeczenie-profilaktyczne-p1*.pdf";
+            throw new UserException($"Brak plików pasujących do wzorca {pattern} bezpośrednio w katalogu firmy. Wiadomość nie zostanie wysłana.");
+        }
         return files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToList();
     }
 
