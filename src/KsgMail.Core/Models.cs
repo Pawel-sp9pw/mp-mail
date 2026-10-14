@@ -32,6 +32,7 @@ public sealed record AppSettings
     public int RetryCount { get; init; } = 3;
     public bool ScheduleEnabled { get; init; }
     public string ScheduleTime { get; init; } = "09:00";
+    public int NegativeIntervalMinutes { get; init; } = 15;
 
     public DateTime DueAt(DateTime localNow)
     {
@@ -75,6 +76,7 @@ public static class Validation
         Require(settings.RetryCount is >= 1 and <= 5, "Liczba prób SMTP: 1–5.");
         Require(TimeOnly.TryParseExact(settings.ScheduleTime, "HH:mm", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out _), "Godzina musi mieć format HH:mm.");
+        Require(settings.NegativeIntervalMinutes is >= 1 and <= 1440, "Interwał NEG: 1–1440 minut.");
     }
 
     public static void Email(string value, string label)
