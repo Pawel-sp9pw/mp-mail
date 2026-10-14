@@ -5,11 +5,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
     private readonly SemaphoreSlim gate = new(1, 1);
 
     public async Task<PreparedBatch> PrepareAsync(IEnumerable<Customer> customers, AppSettings settings, string period,
-        bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken)
+        bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken, bool negativeOnly = false)
     {
         Validation.Settings(settings);
-        var validMonth = DateOnly.TryParseExact(period + "-01", "yyyy-MM-dd", out _);
-        var validDay = DateOnly.TryParseExact(period, "yyyy-MM-dd", out _);
+        var templatePeriod = period.StartsWith("NEG-", StringComparison.Ordinal) ? period.Substring(4, 10) : period;
+        var validMonth = DateOnly.TryParseExact(templatePeriod + "-01", "yyyy-MM-dd", out _);
+        var validDay = DateOnly.TryParseExact(templatePeriod, "yyyy-MM-dd", out _);
         if (!validMonth && !validDay) throw new UserException("Niepoprawny okres wysyłki.");
         var directory = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -20,8 +21,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Report($"Przygotowanie: {customer.Name}");
-                var subject = Templates.Render(customer.Subject, customer, period);
-                var body = Templates.Render(customer.Body, customer, period);
+                var subject = Templates.Render(customer.Subject, customer, templatePeriod);
+                var body = Templates.Render(customer.Body, customer, templatePeriod);
                 var path = Path.Combine(directory, customer.Id + ".zip");
                 if (!allowResend && repository.IsBlocked(customer.Id, period))
                 {
@@ -36,7 +37,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     if (tempPath.StartsWith(sourcePath, StringComparison.OrdinalIgnoreCase) ||
                         sourcePath.StartsWith(tempPath, StringComparison.OrdinalIgnoreCase))
                         throw new UserException("Katalog dokumentów nie może obejmować katalogu roboczego MP Mail.");
-                    var files = await Task.Run(() => archives.Discover(customer.SourceDirectory, settings.MaxSourceMb * 1048576L), cancellationToken);
+                    var files = await Task.Run(() => archives.Discover(customer.SourceDirectory, settings.MaxSourceMb * 1048576L, negativeOnly), cancellationToken);
                     await Task.Run(() => archives.Create(path, files, customer, settings.MaxAttachmentMb * 1048576L, cancellationToken), cancellationToken);
                     batch.Items.Add(new(customer, period, subject, body, path, files, new FileInfo(path).Length, null, false));
                 }
@@ -101,6 +102,29 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             }
         }
         finally { gate.Release(); }
+    }
+
+    public async Task RunAutomationsAsync(DateTime localNow, CancellationToken cancellationToken)
+    {
+        var settings = repository.Settings();
+        if (!settings.ScheduleEnabled) return;
+
+        var interval = settings.NegativeIntervalMinutes;
+        var totalMinutes = localNow.Hour * 60 + localNow.Minute;
+        var slotMinutes = totalMinutes - totalMinutes % interval;
+        var slotHour = slotMinutes / 60;
+        var slotMinute = slotMinutes % 60;
+        var slot = new DateTime(localNow.Year, localNow.Month, localNow.Day, slotHour, slotMinute, 0);
+        var negativePeriod = $"NEG-{slot:yyyy-MM-dd-HHmm}";
+        var negativeCustomers = repository.Customers()
+            .Where(customer => customer.Active && !repository.IsBlocked(customer.Id, negativePeriod)).ToList();
+        if (negativeCustomers.Count > 0)
+        {
+            using var negativeBatch = await PrepareAsync(negativeCustomers, settings, negativePeriod, false, null, cancellationToken, true);
+            await SendAsync(negativeBatch, false, null, cancellationToken);
+        }
+
+        await RunScheduledAsync(localNow, cancellationToken);
     }
 
     public async Task RunScheduledAsync(DateTime localNow, CancellationToken cancellationToken)
