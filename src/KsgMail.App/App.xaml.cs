@@ -35,12 +35,12 @@ public partial class App : Application
                 ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 try
                 {
-                    await batches.RunScheduledAsync(DateTime.Now, CancellationToken.None);
+                    await batches.RunAutomationsAsync(DateTime.Now, CancellationToken.None);
                     Shutdown(0);
                 }
                 catch (Exception exception)
                 {
-                    repository.Log(new Customer { Name = "Harmonogram" }, DateTime.Now.ToString("yyyy-MM"),
+                    repository.Log(new Customer { Name = "Harmonogram" }, DateTime.Now.ToString("yyyy-MM-dd"),
                         DeliveryStatus.Failed, ErrorMessages.Describe(exception));
                     Shutdown(1);
                 }
