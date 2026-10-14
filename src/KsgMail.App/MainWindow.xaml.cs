@@ -155,6 +155,7 @@ public partial class MainWindow : Window
         RetryCount.Text = settings.RetryCount.ToString(CultureInfo.InvariantCulture);
         ScheduleEnabled.IsChecked = settings.ScheduleEnabled;
         ScheduleTime.Text = settings.ScheduleTime;
+        NegativeIntervalMinutes.Text = settings.NegativeIntervalMinutes.ToString(CultureInfo.InvariantCulture);
     }
 
     private static int Number(TextBox field, string name)
