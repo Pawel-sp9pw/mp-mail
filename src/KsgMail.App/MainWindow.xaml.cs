@@ -311,8 +311,8 @@ public partial class MainWindow : Window
 
     private async void ScheduleTick(object? senderObject, EventArgs args)
     {
-        if (busy || prepared != null || DateTime.Now < nextScheduleCheck || !repository.Settings().IsDue(DateTime.Now)) return;
-        nextScheduleCheck = DateTime.Now.AddHours(1);
+        if (busy || prepared != null || DateTime.Now < nextScheduleCheck || !repository.Settings().ScheduleEnabled) return;
+        nextScheduleCheck = DateTime.Now.AddMinutes(1);
         busy = true;
         Tabs.IsEnabled = false;
         CancelButton.IsEnabled = true;
