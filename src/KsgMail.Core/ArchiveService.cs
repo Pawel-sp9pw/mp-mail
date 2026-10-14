@@ -29,6 +29,19 @@ public sealed class ArchiveService(ISecretProtector secrets)
     public const string SendFilePrefix = "orzeczenie-profilaktyczne-p1";
     public const string NegativeFilePrefix = "NEG.orzeczenie-profilaktyczne-p1";
 
+    public bool HasMatchingFiles(string directory, bool negativeOnly = false)
+    {
+        if (!Directory.Exists(directory)) return false;
+        return Directory.EnumerateFiles(directory).Any(path =>
+        {
+            var fileName = Path.GetFileName(path);
+            var isPdf = Path.GetExtension(fileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+            var isNegative = fileName.StartsWith(NegativeFilePrefix, StringComparison.OrdinalIgnoreCase);
+            var isStandard = fileName.StartsWith(SendFilePrefix, StringComparison.OrdinalIgnoreCase);
+            return isPdf && (negativeOnly ? isNegative : isStandard && !isNegative);
+        });
+    }
+
     public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes, bool negativeOnly = false)
     {
         if (!Directory.Exists(directory)) throw new UserException("Katalog źródłowy nie istnieje lub jest niedostępny.");
