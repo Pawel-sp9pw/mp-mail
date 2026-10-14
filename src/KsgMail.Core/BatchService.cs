@@ -117,7 +117,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         var slot = new DateTime(localNow.Year, localNow.Month, localNow.Day, slotHour, slotMinute, 0);
         var negativePeriod = $"NEG-{slot:yyyy-MM-dd-HHmm}";
         var negativeCustomers = repository.Customers()
-            .Where(customer => customer.Active && !repository.IsBlocked(customer.Id, negativePeriod)).ToList();
+            .Where(customer => customer.Active &&
+                !repository.IsBlocked(customer.Id, negativePeriod) &&
+                archives.HasMatchingFiles(customer.SourceDirectory, true)).ToList();
         if (negativeCustomers.Count > 0)
         {
             using var negativeBatch = await PrepareAsync(negativeCustomers, settings, negativePeriod, false, null, cancellationToken, true);
@@ -132,7 +134,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         var settings = repository.Settings();
         if (!settings.IsDue(localNow)) return;
         var period = localNow.ToString("yyyy-MM-dd");
-        var customers = repository.Customers().Where(customer => customer.Active && !repository.IsBlocked(customer.Id, period)).ToList();
+        var customers = repository.Customers().Where(customer => customer.Active &&
+            !repository.IsBlocked(customer.Id, period) &&
+            archives.HasMatchingFiles(customer.SourceDirectory, false)).ToList();
         if (customers.Count == 0) return;
         using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken);
         await SendAsync(batch, false, null, cancellationToken);
