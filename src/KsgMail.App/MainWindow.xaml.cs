@@ -176,7 +176,8 @@ public partial class MainWindow : Window
             SenderEmail = SenderEmail.Text.Trim(), SenderName = SenderName.Text.Trim(),
             MaxAttachmentMb = Number(AttachmentLimit, "Limit ZIP"), MaxSourceMb = Number(SourceLimit, "Limit plików"),
             RetryCount = Number(RetryCount, "Liczba prób"), ScheduleEnabled = ScheduleEnabled.IsChecked == true,
-            ScheduleTime = ScheduleTime.Text.Trim()
+            ScheduleTime = ScheduleTime.Text.Trim(),
+            NegativeIntervalMinutes = Number(NegativeIntervalMinutes, "Interwał NEG")
         };
         Validation.Settings(result);
         return result;
