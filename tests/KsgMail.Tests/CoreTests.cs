@@ -27,7 +27,8 @@ public sealed class CoreTests
         var xml = WindowsScheduler.BuildTaskXml(settings, @"C:\Program Files\MP Mail\MpMail.exe", "S-1-5-21-test");
         XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
         Assert.Equal("2020-01-01T07:45:00", xml.Descendants(ns + "StartBoundary").Single().Value);
-        Assert.Equal("1", xml.Descendants(ns + "DaysInterval").Single().Value);
+        Assert.All(xml.Descendants(ns + "DaysInterval"), element => Assert.Equal("1", element.Value));
+        Assert.Contains("PT15M", xml.Descendants(ns + "Interval").Select(element => element.Value));
         Assert.Single(xml.Descendants(ns + "LogonTrigger"));
         Assert.Equal("--scheduled", xml.Descendants(ns + "Arguments").Single().Value);
         Assert.Equal(@"C:\Program Files\MP Mail\MpMail.exe", xml.Descendants(ns + "Command").Single().Value);
@@ -60,24 +61,29 @@ public sealed class CoreTests
     }
 
     [Fact]
-    public void DiscoverAlwaysExcludesArchiveDirectory()
+    public void DiscoverUsesOnlyRootDirectoryAndSeparatesNegativeFiles()
     {
         using var workspace = new TestWorkspace();
         File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.pdf"), "current");
+        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-999.pdf"), "negative");
         File.WriteAllText(Path.Combine(workspace.Source, "inne-orzeczenie.pdf"), "other");
         File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p2-123.pdf"), "other");
         File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.txt"), "other");
         var archive = Path.Combine(workspace.Source, "archiwum", "2026-10-11");
         Directory.CreateDirectory(archive);
         File.WriteAllText(Path.Combine(archive, "orzeczenie-profilaktyczne-p1-old.pdf"), "old");
-        var nestedArchive = Path.Combine(workspace.Source, "podkatalog", "ArChIwUm");
-        Directory.CreateDirectory(nestedArchive);
-        File.WriteAllText(Path.Combine(nestedArchive, "orzeczenie-profilaktyczne-p1-old2.pdf"), "old2");
+        var subdirectory = Path.Combine(workspace.Source, "podkatalog");
+        Directory.CreateDirectory(subdirectory);
+        File.WriteAllText(Path.Combine(subdirectory, "orzeczenie-profilaktyczne-p1-hidden.pdf"), "hidden");
 
-        var files = new ArchiveService(workspace.Secrets).Discover(workspace.Source, 10 * 1048576L);
+        var service = new ArchiveService(workspace.Secrets);
+        var files = service.Discover(workspace.Source, 10 * 1048576L);
+        var negativeFiles = service.Discover(workspace.Source, 10 * 1048576L, true);
 
         var file = Assert.Single(files);
         Assert.Equal("orzeczenie-profilaktyczne-p1-123.pdf", file.RelativePath);
+        var negative = Assert.Single(negativeFiles);
+        Assert.Equal("NEG.orzeczenie-profilaktyczne-p1-999.pdf", negative.RelativePath);
     }
 
     [Fact]
@@ -90,6 +96,32 @@ public sealed class CoreTests
         var exception = Assert.Throws<UserException>(() => service.Discover(workspace.Source, 10 * 1048576L));
 
         Assert.Contains("orzeczenie-profilaktyczne-p1*.pdf", exception.Message);
+    }
+
+    [Fact]
+    public async Task NegativeFilesSendOncePerConfiguredInterval()
+    {
+        using var workspace = new TestWorkspace();
+        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-001.pdf"), "negative");
+        workspace.Repository.SaveCustomer(workspace.Customer);
+        workspace.Repository.SaveSettings(workspace.Settings with
+        {
+            ScheduleEnabled = true,
+            ScheduleTime = "23:00",
+            NegativeIntervalMinutes = 15
+        });
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 14, 9, 7, 0), CancellationToken.None);
+        Assert.Equal(1, sender.Count);
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "NEG-2026-10-14-0900", "NEG.orzeczenie-profilaktyczne-p1-001.pdf")));
+
+        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-002.pdf"), "negative2");
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 14, 9, 10, 0), CancellationToken.None);
+        Assert.Equal(1, sender.Count);
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 14, 9, 16, 0), CancellationToken.None);
+        Assert.Equal(2, sender.Count);
     }
 
     [Fact]
