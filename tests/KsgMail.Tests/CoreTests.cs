@@ -26,7 +26,8 @@ public sealed class CoreTests
         var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "07:45" };
         var xml = WindowsScheduler.BuildTaskXml(settings, @"C:\Program Files\MP Mail\MpMail.exe", "S-1-5-21-test");
         XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
-        Assert.Equal("2020-01-01T07:45:00", xml.Descendants(ns + "StartBoundary").Single().Value);
+        Assert.Contains("2020-01-01T07:45:00", xml.Descendants(ns + "StartBoundary").Select(element => element.Value));
+        Assert.Contains("2020-01-01T00:00:00", xml.Descendants(ns + "StartBoundary").Select(element => element.Value));
         Assert.All(xml.Descendants(ns + "DaysInterval"), element => Assert.Equal("1", element.Value));
         Assert.Contains("PT15M", xml.Descendants(ns + "Interval").Select(element => element.Value));
         Assert.Single(xml.Descendants(ns + "LogonTrigger"));
