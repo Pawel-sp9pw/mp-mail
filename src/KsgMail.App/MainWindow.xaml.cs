@@ -56,6 +56,7 @@ public partial class MainWindow : Window
 
     private void ApplyCustomerFilter()
     {
+        if (CustomersGrid == null) return;
         var search = CustomerSearch?.Text?.Trim() ?? "";
         var state = CustomerStateFilter?.SelectedIndex ?? 0;
         var filtered = allCustomers.Where(customer =>
