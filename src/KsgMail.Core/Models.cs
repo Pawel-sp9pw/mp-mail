@@ -54,7 +54,8 @@ public static class Validation
     {
         Require(Guid.TryParseExact(customer.Id, "N", out _), "Niepoprawny identyfikator firmy.");
         Require(!string.IsNullOrWhiteSpace(customer.Name), "Podaj nazwę firmy.");
-        Email(customer.Email, "Adres firmy");
+        if (customer.Active || !string.IsNullOrWhiteSpace(customer.Email))
+            Email(customer.Email, "Adres firmy");
         Require(!string.IsNullOrWhiteSpace(customer.Subject), "Podaj temat wiadomości.");
         Require(!customer.Subject.Contains('\r') && !customer.Subject.Contains('\n'), "Temat nie może zawierać nowych linii.");
         Require(!string.IsNullOrWhiteSpace(customer.Body), "Podaj treść wiadomości.");
