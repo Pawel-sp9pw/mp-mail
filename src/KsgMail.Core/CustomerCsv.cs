@@ -69,6 +69,8 @@ public static class CustomerCsv
                 added++;
             }
             var password = Get("haslo_zip");
+            var protectedPassword = password.Length == 0 ? current.ZipPasswordProtected : secrets.Protect(password);
+            var requestedActive = ParseBool(Get("aktywny"));
             var customer = current with
             {
                 Name = name,
@@ -76,11 +78,9 @@ public static class CustomerCsv
                 Subject = Get("temat"),
                 Body = Get("tresc"),
                 SourceDirectory = Get("katalog"),
-                Active = ParseBool(Get("aktywny")),
-                ZipPasswordProtected = password.Length == 0 ? current.ZipPasswordProtected : secrets.Protect(password)
+                Active = requestedActive && email.Length > 0 && protectedPassword.Length > 0,
+                ZipPasswordProtected = protectedPassword
             };
-            if (customer.ZipPasswordProtected.Length == 0)
-                throw new UserException($"CSV wiersz {rowNo + 1}: nowa firma wymaga hasła ZIP w kolumnie haslo_zip.");
             try { Validation.Customer(customer); }
             catch (UserException ex) { throw new UserException($"CSV wiersz {rowNo + 1}: {ex.Message}"); }
             result.Add(customer);
