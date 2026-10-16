@@ -12,6 +12,7 @@ Aplikacja Windows do codziennej wysyłki dokumentów do firm przez SMTP. Jest to
 - podgląd przed wysyłką i zabezpieczenie przed duplikatami w danym dniu;
 - harmonogram zbiorczy raz dziennie oraz dodatkowy interwał NEG przez Harmonogram zadań Windows;
 - po potwierdzonej poprawnej wysyłce przeniesienie wysłanych plików do `archiwum/<okres>/` pod katalogiem danej firmy;
+- konfigurowalna retencja archiwum (domyślnie 90 dni) z automatycznym usuwaniem przeterminowanych plików i pustych katalogów;
 - historia wysyłek;
 - import i eksport listy firm do CSV.
 
@@ -38,7 +39,7 @@ Zadanie uruchamia `MpMail.exe --scheduled`:
 - cyklicznie zgodnie z interwałem NEG (domyślnie co 15 minut);
 - przy logowaniu użytkownika.
 
-Codziennie po osiągnięciu skonfigurowanej godziny aplikacja wysyła dokumenty do aktywnych firm. Jeśli komputer był wyłączony o tej godzinie, uruchomienie zadania przy późniejszym logowaniu może wykonać wysyłkę tego samego dnia. Firma, która ma już status Wysłano lub Niepewny dla danego dnia, nie jest automatycznie wysyłana ponownie. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<RRRR-MM-DD>/`. Program nie przeszukuje żadnych podkatalogów firmy. `orzeczenie-profilaktyczne-p1*.pdf` bez prefiksu `NEG.` są wysyłane zbiorczo według harmonogramu dziennego. `NEG.orzeczenie-profilaktyczne-p1*.pdf` są wysyłane wyłącznie w trybie interwałowym. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
+Podczas automatycznych uruchomień aplikacja najpierw wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Codziennie po osiągnięciu skonfigurowanej godziny aplikacja wysyła dokumenty do aktywnych firm. Jeśli komputer był wyłączony o tej godzinie, uruchomienie zadania przy późniejszym logowaniu może wykonać wysyłkę tego samego dnia. Firma, która ma już status Wysłano lub Niepewny dla danego dnia, nie jest automatycznie wysyłana ponownie. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<RRRR-MM-DD>/`. Program nie przeszukuje żadnych podkatalogów firmy. `orzeczenie-profilaktyczne-p1*.pdf` bez prefiksu `NEG.` są wysyłane zbiorczo według harmonogramu dziennego. `NEG.orzeczenie-profilaktyczne-p1*.pdf` są wysyłane wyłącznie w trybie interwałowym. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -51,6 +52,7 @@ Testy automatyczne sprawdzają:
 - rozdzielenie zwykłych i `NEG.` plików;
 - wysyłkę `NEG.` zgodnie z interwałem;
 - przeniesienie wysłanych plików do archiwum oraz pomijanie archiwum przy pakowaniu;
+- retencję archiwum, usuwanie przeterminowanych plików i pustych katalogów;
 - import/eksport CSV, cytowanie pól i nieeksportowanie hasła ZIP.
 
 ## Dane aplikacji
@@ -66,9 +68,9 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.5.0
+.\build.ps1 -Version 0.6.0
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.5.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.6.0-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
