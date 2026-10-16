@@ -71,7 +71,8 @@
        <CheckBox x:Name="ScheduleEnabled" Content="Włącz automatyczną wysyłkę codzienną" Margin="0,6,0,16"/>
        <TextBlock Text="Godzina wysyłki zbiorczej (HH:mm)"/><TextBox x:Name="ScheduleTime"/>
        <TextBlock Text="Interwał wysyłki NEG (minuty, domyślnie 15)" Margin="0,8,0,0"/><TextBox x:Name="NegativeIntervalMinutes"/>
-       <TextBlock Text="Zwykłe orzeczenia są wysyłane zbiorczo raz dziennie o ustawionej godzinie. Pliki NEG.orzeczenie-profilaktyczne-p1*.pdf są sprawdzane i wysyłane osobno co ustawiony interwał. Uwzględniane są tylko pliki bezpośrednio w katalogu firmy — podkatalogi są pomijane." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
+       <TextBlock Text="Retencja archiwum (dni, domyślnie 90)" Margin="0,8,0,0"/><TextBox x:Name="ArchiveRetentionDays"/>
+       <TextBlock Text="Zwykłe orzeczenia są wysyłane zbiorczo raz dziennie o ustawionej godzinie. Pliki NEG.orzeczenie-profilaktyczne-p1*.pdf są sprawdzane i wysyłane osobno co ustawiony interwał. Pliki w archiwum starsze niż ustawiony okres retencji są automatycznie usuwane. Uwzględniane są tylko pliki bezpośrednio w katalogu firmy — podkatalogi są pomijane." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
       </StackPanel>
      </Grid>
     </ScrollViewer>
