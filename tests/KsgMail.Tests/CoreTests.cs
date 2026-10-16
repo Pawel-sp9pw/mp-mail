@@ -170,6 +170,62 @@ public sealed class CoreTests
     }
 
     [Fact]
+    public void CsvImportTreatsBlankActiveAsInactiveAndAllowsBlankEmail()
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Root, "inactive.csv");
+        File.WriteAllText(path,
+            "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
+            $";Firma bez maila;;Dokumenty;Treść;{workspace.Source};sekret;\n");
+
+        var result = CustomerCsv.Import(path, [], workspace.Secrets);
+
+        var company = Assert.Single(result.Customers);
+        Assert.False(company.Active);
+        Assert.Equal("", company.Email);
+    }
+
+    [Fact]
+    public void CsvImportUpdatesExistingCompanyByNameWhenIdAndEmailAreMissing()
+    {
+        using var workspace = new TestWorkspace();
+        var existing = workspace.Customer with { Name = "Firma istniejąca", Email = "old@example.test", Active = true };
+        var path = Path.Combine(workspace.Root, "update.csv");
+        File.WriteAllText(path,
+            "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
+            $";Firma istniejąca;;Nowy temat;Nowa treść;{workspace.Source};;\n");
+
+        var result = CustomerCsv.Import(path, [existing], workspace.Secrets);
+
+        var company = Assert.Single(result.Customers);
+        Assert.Equal(existing.Id, company.Id);
+        Assert.Equal(existing.ZipPasswordProtected, company.ZipPasswordProtected);
+        Assert.Equal("Nowy temat", company.Subject);
+        Assert.False(company.Active);
+        Assert.Equal(0, result.Added);
+        Assert.Equal(1, result.Updated);
+    }
+
+    [Fact]
+    public void CsvImportUpdatesExistingCompanyByEmailWhenIdIsMissing()
+    {
+        using var workspace = new TestWorkspace();
+        var existing = workspace.Customer with { Name = "Stara nazwa", Email = "match@example.test" };
+        var path = Path.Combine(workspace.Root, "update-email.csv");
+        File.WriteAllText(path,
+            "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
+            $";Nowa nazwa;match@example.test;Temat;Treść;{workspace.Source};;1\n");
+
+        var result = CustomerCsv.Import(path, [existing], workspace.Secrets);
+
+        var company = Assert.Single(result.Customers);
+        Assert.Equal(existing.Id, company.Id);
+        Assert.Equal("Nowa nazwa", company.Name);
+        Assert.Equal(0, result.Added);
+        Assert.Equal(1, result.Updated);
+    }
+
+    [Fact]
     public void CsvNewCompanyRequiresZipPassword()
     {
         using var workspace = new TestWorkspace();
