@@ -100,6 +100,49 @@ public sealed class CoreTests
     }
 
     [Fact]
+    public void ArchiveRetentionDeletesOnlyExpiredFilesAndEmptyDirectories()
+    {
+        using var workspace = new TestWorkspace();
+        var archive = Path.Combine(workspace.Source, "archiwum");
+        var oldDirectory = Path.Combine(archive, "2026-01-01");
+        var freshDirectory = Path.Combine(archive, "2026-10-01");
+        Directory.CreateDirectory(oldDirectory);
+        Directory.CreateDirectory(freshDirectory);
+        var oldFile = Path.Combine(oldDirectory, "old.pdf");
+        var freshFile = Path.Combine(freshDirectory, "fresh.pdf");
+        File.WriteAllText(oldFile, "old");
+        File.WriteAllText(freshFile, "fresh");
+        var now = new DateTime(2026, 10, 16, 10, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(oldFile, now.AddDays(-91));
+        File.SetLastWriteTimeUtc(freshFile, now.AddDays(-30));
+
+        var deleted = new ArchiveService(workspace.Secrets).PurgeExpired(workspace.Source, 90, now);
+
+        Assert.Equal(1, deleted);
+        Assert.False(File.Exists(oldFile));
+        Assert.False(Directory.Exists(oldDirectory));
+        Assert.True(File.Exists(freshFile));
+    }
+
+    [Fact]
+    public void ArchivingRefreshesRetentionTimestamp()
+    {
+        using var workspace = new TestWorkspace();
+        var source = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-old.pdf");
+        File.WriteAllText(source, "document");
+        File.SetLastWriteTimeUtc(source, DateTime.UtcNow.AddYears(-2));
+        var info = new FileInfo(source);
+        var file = new SourceFile(source, Path.GetFileName(source), info.Length, info.LastWriteTimeUtc);
+        var before = DateTime.UtcNow.AddMinutes(-1);
+
+        new ArchiveService(workspace.Secrets).ArchiveSent(workspace.Source, [file], "2026-10-16");
+
+        var destination = Path.Combine(workspace.Source, "archiwum", "2026-10-16", Path.GetFileName(source));
+        Assert.True(File.Exists(destination));
+        Assert.True(File.GetLastWriteTimeUtc(destination) >= before);
+    }
+
+    [Fact]
     public async Task NegativeFilesSendOncePerConfiguredInterval()
     {
         using var workspace = new TestWorkspace();
