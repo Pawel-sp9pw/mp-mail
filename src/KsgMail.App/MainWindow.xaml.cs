@@ -156,6 +156,7 @@ public partial class MainWindow : Window
         ScheduleEnabled.IsChecked = settings.ScheduleEnabled;
         ScheduleTime.Text = settings.ScheduleTime;
         NegativeIntervalMinutes.Text = settings.NegativeIntervalMinutes.ToString(CultureInfo.InvariantCulture);
+        ArchiveRetentionDays.Text = settings.ArchiveRetentionDays.ToString(CultureInfo.InvariantCulture);
     }
 
     private static int Number(TextBox field, string name)
@@ -177,7 +178,8 @@ public partial class MainWindow : Window
             MaxAttachmentMb = Number(AttachmentLimit, "Limit ZIP"), MaxSourceMb = Number(SourceLimit, "Limit plików"),
             RetryCount = Number(RetryCount, "Liczba prób"), ScheduleEnabled = ScheduleEnabled.IsChecked == true,
             ScheduleTime = ScheduleTime.Text.Trim(),
-            NegativeIntervalMinutes = Number(NegativeIntervalMinutes, "Interwał NEG")
+            NegativeIntervalMinutes = Number(NegativeIntervalMinutes, "Interwał NEG"),
+            ArchiveRetentionDays = Number(ArchiveRetentionDays, "Retencja archiwum")
         };
         Validation.Settings(result);
         return result;
