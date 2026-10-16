@@ -99,6 +99,7 @@ public sealed class ArchiveService(ISecretProtector secrets)
 
     public int PurgeExpired(string sourceDirectory, int retentionDays, DateTime utcNow)
     {
+        if (string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory)) return 0;
         var archiveRoot = Path.Combine(Path.GetFullPath(sourceDirectory), SentArchiveDirectoryName);
         if (!Directory.Exists(archiveRoot)) return 0;
         RejectLink(archiveRoot);
