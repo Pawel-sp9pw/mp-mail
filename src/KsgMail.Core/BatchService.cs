@@ -109,6 +109,23 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         var settings = repository.Settings();
         if (!settings.ScheduleEnabled) return;
 
+        foreach (var customer in repository.Customers())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var deleted = archives.PurgeExpired(customer.SourceDirectory, settings.ArchiveRetentionDays, DateTime.UtcNow);
+                if (deleted > 0)
+                    repository.Log(customer, localNow.ToString("yyyy-MM-dd"), DeliveryStatus.Success,
+                        $"Retencja archiwum: usunięto {deleted} plików starszych niż {settings.ArchiveRetentionDays} dni.");
+            }
+            catch (Exception exception)
+            {
+                repository.Log(customer, localNow.ToString("yyyy-MM-dd"), DeliveryStatus.Failed,
+                    $"Retencja archiwum nie powiodła się: {ErrorMessages.Describe(exception)}");
+            }
+        }
+
         var interval = settings.NegativeIntervalMinutes;
         var totalMinutes = localNow.Hour * 60 + localNow.Minute;
         var slotMinutes = totalMinutes - totalMinutes % interval;
