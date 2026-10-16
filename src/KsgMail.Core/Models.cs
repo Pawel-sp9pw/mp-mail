@@ -33,6 +33,7 @@ public sealed record AppSettings
     public bool ScheduleEnabled { get; init; }
     public string ScheduleTime { get; init; } = "09:00";
     public int NegativeIntervalMinutes { get; init; } = 15;
+    public int ArchiveRetentionDays { get; init; } = 90;
 
     public DateTime DueAt(DateTime localNow)
     {
@@ -78,6 +79,7 @@ public static class Validation
         Require(TimeOnly.TryParseExact(settings.ScheduleTime, "HH:mm", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out _), "Godzina musi mieć format HH:mm.");
         Require(settings.NegativeIntervalMinutes is >= 1 and <= 1440, "Interwał NEG: 1–1440 minut.");
+        Require(settings.ArchiveRetentionDays is >= 1 and <= 3650, "Retencja archiwum: 1–3650 dni.");
     }
 
     public static void Email(string value, string label)
