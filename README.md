@@ -14,7 +14,9 @@ Aplikacja Windows do codziennej wysyłki dokumentów do firm przez SMTP. Jest to
 - po potwierdzonej poprawnej wysyłce przeniesienie wysłanych plików do `archiwum/<okres>/` pod katalogiem danej firmy;
 - konfigurowalna retencja archiwum (domyślnie 90 dni) z automatycznym usuwaniem przeterminowanych plików i pustych katalogów;
 - historia wysyłek;
-- import i eksport listy firm do CSV.
+- import i eksport listy firm do CSV;
+- automatyczne i ręczne sprawdzanie aktualizacji przez GitHub Releases;
+- bezpieczne pobieranie i instalowanie aktualizacji po weryfikacji SHA-256.
 
 ## CSV
 
@@ -68,9 +70,23 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.6.0
+.\build.ps1 -Version 0.7.0
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.6.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.7.0-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
+
+
+## Aktualizacje
+
+MP Mail automatycznie sprawdza przy uruchomieniu najnowszy stabilny GitHub Release repozytorium `Pawel-sp9pw/mp-mail`. W zakładce **Aktualizacje** można również wykonać sprawdzenie ręczne.
+
+Jeśli dostępna jest nowsza wersja, aplikacja:
+1. pobiera instalator `MpMail-Setup-<wersja>-win-x64.exe` z GitHub Release,
+2. pobiera `SHA256SUMS.txt` z tego samego wydania,
+3. weryfikuje SHA-256 instalatora,
+4. uruchamia instalator dopiero po poprawnej weryfikacji,
+5. zamyka MP Mail, aby instalator mógł bezpiecznie zastąpić pliki programu.
+
+Nie jest używany żaden zewnętrzny serwer aktualizacji poza GitHub Releases projektu.
