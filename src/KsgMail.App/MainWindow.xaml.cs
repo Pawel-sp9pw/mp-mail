@@ -133,8 +133,8 @@ public partial class MainWindow : Window
         LoadCustomers();
         CustomersGrid.SelectedItem = allCustomers.FirstOrDefault(item => item.Id == customer.Id);
         ShowCustomer(customer);
-        StatusText.Text = "Zapisano firmę.";
-    });
+        StatusText.Text = $"Zapisano firmę: {customer.Name}.";
+    }, CustomerName.Text.Trim());
 
     private static void ValidateSourceDirectory(Customer customer)
     {
@@ -216,17 +216,35 @@ public partial class MainWindow : Window
         StatusText.Text = $"Wyeksportowano {repository.Customers().Count} firm. Hasła ZIP nie są eksportowane.";
     });
 
-    private void ImportCsv(object senderObject, RoutedEventArgs args) => Guard(() =>
+    private async void ImportCsv(object senderObject, RoutedEventArgs args)
     {
         var dialog = new OpenFileDialog { Title = "Import listy firm", Filter = "Plik CSV (*.csv)|*.csv" };
         if (dialog.ShowDialog(this) != true) return;
-        var result = CustomerCsv.Import(dialog.FileName, repository.Customers(), secrets);
-        foreach (var customer in result.Customers) ValidateSourceDirectory(customer);
-        repository.SaveCustomers(result.Customers);
-        InvalidatePreview();
-        LoadCustomers();
-        StatusText.Text = $"Import zakończony: nowych {result.Added}, zaktualizowanych {result.Updated}.";
-    });
+        await RunAsync(async cancellationToken =>
+        {
+            var progress = new Progress<string>(text => StatusText.Text = text);
+            var result = await Task.Run(() =>
+            {
+                var imported = CustomerCsv.Import(dialog.FileName, repository.Customers(), secrets, progress);
+                foreach (var customer in imported.Customers)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try { ValidateSourceDirectory(customer); }
+                    catch (Exception exception)
+                    {
+                        throw new UserException(ErrorMessages.ForCustomer(customer.Name, exception), exception);
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                repository.SaveCustomers(imported.Customers, progress);
+                return imported;
+            }, cancellationToken);
+            InvalidatePreview();
+            LoadCustomers();
+            StatusText.Text = $"Import zakończony: nowych {result.Added}, zaktualizowanych {result.Updated}." +
+                (result.Customers.Count == 0 ? "" : $" Zapisano firmy: {string.Join(", ", result.Customers.Select(customer => customer.Name))}.");
+        });
+    }
 
     private void LoadSettings()
     {
@@ -271,7 +289,10 @@ public partial class MainWindow : Window
             ArchiveRetentionDays = Number(ArchiveRetentionDays, "Retencja archiwum")
         };
         Validation.Settings(result);
-        return result;
+        return result with
+        {
+            ScheduleTime = string.Join(", ", result.GetScheduleTimes().Select(time => time.ToString("HH:mm", CultureInfo.InvariantCulture)))
+        };
     }
 
     private async void SaveSettings(object senderObject, RoutedEventArgs args) => await RunAsync(async cancellationToken =>
@@ -464,15 +485,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Guard(Action action)
+    private void Guard(Action action, string? customerName = null)
     {
         try { action(); }
-        catch (Exception exception) { ShowError(exception); }
+        catch (Exception exception) { ShowError(exception, customerName); }
     }
 
-    private void ShowError(Exception exception)
+    private void ShowError(Exception exception, string? customerName = null)
     {
-        var message = ErrorMessages.Describe(exception);
+        var message = customerName == null ? ErrorMessages.Describe(exception) : ErrorMessages.ForCustomer(customerName, exception);
         StatusText.Text = message;
         MessageBox.Show(this, message, "MP Mail", MessageBoxButton.OK, MessageBoxImage.Warning);
     }

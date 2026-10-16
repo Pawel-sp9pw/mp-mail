@@ -8,7 +8,9 @@
   </Grid>
   <Border DockPanel.Dock="Bottom" Background="#E5EDF6" Padding="12" Margin="0,14,0,0">
    <DockPanel><Button x:Name="CancelButton" DockPanel.Dock="Right" Content="Anuluj operację" Click="CancelOperation" IsEnabled="False"/>
-    <TextBlock x:Name="StatusText" Text="Gotowy. Uzupełnij SMTP i dodaj firmy." VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
+    <ScrollViewer MaxHeight="90" VerticalScrollBarVisibility="Auto">
+     <TextBlock x:Name="StatusText" Text="Gotowy. Uzupełnij SMTP i dodaj firmy." VerticalAlignment="Center" TextWrapping="Wrap"/>
+    </ScrollViewer></DockPanel>
   </Border>
   <TabControl x:Name="Tabs">
    <TabItem Header="  Firmy  ">
@@ -88,10 +90,11 @@
        <TextBlock Text="Liczba prób SMTP (1–5)"/><TextBox x:Name="RetryCount"/>
        <Separator Margin="0,14"/>
        <CheckBox x:Name="ScheduleEnabled" Content="Włącz automatyczną wysyłkę codzienną" Margin="0,6,0,16"/>
-       <TextBlock Text="Godzina wysyłki zbiorczej (HH:mm)"/><TextBox x:Name="ScheduleTime"/>
+       <TextBlock Text="Godziny wysyłki zbiorczej (HH:mm, oddzielone przecinkami)" TextWrapping="Wrap"/><TextBox x:Name="ScheduleTime"/>
+       <TextBlock Text="Np. 09:00, 13:00, 16:30. Możesz podać jedną lub więcej godzin." TextWrapping="Wrap" Foreground="#526477"/>
        <TextBlock Text="Interwał wysyłki NEG (minuty, domyślnie 15)" Margin="0,8,0,0"/><TextBox x:Name="NegativeIntervalMinutes"/>
        <TextBlock Text="Retencja archiwum (dni, domyślnie 90)" Margin="0,8,0,0"/><TextBox x:Name="ArchiveRetentionDays"/>
-       <TextBlock Text="Zwykłe orzeczenia są wysyłane zbiorczo raz dziennie o ustawionej godzinie. Pliki NEG.orzeczenie-profilaktyczne-p1*.pdf są sprawdzane i wysyłane osobno co ustawiony interwał. Pliki w archiwum starsze niż ustawiony okres retencji są automatycznie usuwane. Uwzględniane są tylko pliki bezpośrednio w katalogu firmy — podkatalogi są pomijane." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
+       <TextBlock Text="Zwykłe orzeczenia są wysyłane zbiorczo o każdej ustawionej godzinie. W jednym terminie firma otrzyma najwyżej jedną wysyłkę; nowe dokumenty mogą zostać wysłane w kolejnym terminie. Po przerwie nadrabiany jest ostatni osiągnięty termin. Pliki NEG.orzeczenie-profilaktyczne-p1*.pdf są sprawdzane i wysyłane osobno co ustawiony interwał. Pliki w archiwum starsze niż ustawiony okres retencji są automatycznie usuwane. Uwzględniane są tylko pliki bezpośrednio w katalogu firmy — podkatalogi są pomijane." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
       </StackPanel>
      </Grid>
     </ScrollViewer>

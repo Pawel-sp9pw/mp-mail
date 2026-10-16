@@ -8,7 +8,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken, bool negativeOnly = false)
     {
         Validation.Settings(settings);
-        var templatePeriod = period.StartsWith("NEG-", StringComparison.Ordinal) ? period.Substring(4, 10) : period;
+        var templatePeriod = period.StartsWith("NEG-", StringComparison.Ordinal) ? period.Substring(4, 10) :
+            period.StartsWith("SCHED-", StringComparison.Ordinal) ? period.Substring(6, 10) : period;
         var validMonth = DateOnly.TryParseExact(templatePeriod + "-01", "yyyy-MM-dd", out _);
         var validDay = DateOnly.TryParseExact(templatePeriod, "yyyy-MM-dd", out _);
         if (!validMonth && !validDay) throw new UserException("Niepoprawny okres wysyłki.");
@@ -150,9 +151,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
     {
         var settings = repository.Settings();
         if (!settings.IsDue(localNow)) return;
-        var period = localNow.ToString("yyyy-MM-dd");
+        var period = settings.DueAt(localNow).TimeOfDay == settings.GetScheduleTimes()[0].ToTimeSpan()
+            ? localNow.ToString("yyyy-MM-dd")
+            : $"SCHED-{settings.DueAt(localNow):yyyy-MM-dd-HHmm}";
         var customers = repository.Customers().Where(customer => customer.Active &&
             !repository.IsBlocked(customer.Id, period) &&
+            !repository.HasUnresolvedScheduledDelivery(customer.Id, localNow.ToString("yyyy-MM-dd")) &&
             archives.HasMatchingFiles(customer.SourceDirectory, false)).ToList();
         if (customers.Count == 0) return;
         using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken);

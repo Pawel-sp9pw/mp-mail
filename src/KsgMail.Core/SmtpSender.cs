@@ -112,6 +112,9 @@ public sealed class SmtpSender(ISecretProtector secrets, Func<SmtpClient>? clien
 
 public static class ErrorMessages
 {
+    public static string ForCustomer(string name, Exception exception) =>
+        $"Firma „{(string.IsNullOrWhiteSpace(name) ? "bez nazwy" : name)}”: {Describe(exception)}";
+
     public static string Describe(Exception exception) => exception switch
     {
         UserException user => user.Message,

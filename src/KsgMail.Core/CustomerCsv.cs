@@ -17,7 +17,8 @@ public static class CustomerCsv
                 Escape(c.Body), Escape(c.SourceDirectory), "", c.Active ? "1" : "0"));
     }
 
-    public static CsvImportResult Import(string path, IReadOnlyList<Customer> existing, ISecretProtector secrets)
+    public static CsvImportResult Import(string path, IReadOnlyList<Customer> existing, ISecretProtector secrets,
+        IProgress<string>? progress = null)
     {
         var text = File.ReadAllText(path, Encoding.UTF8);
         var delimiter = DetectDelimiter(text);
@@ -47,46 +48,53 @@ public static class CustomerCsv
             var id = Get("id");
             var name = Get("nazwa");
             var email = Get("email");
-            Customer current;
-            if (id.Length > 0 && byId.TryGetValue(id, out var foundById))
+            try
             {
-                current = foundById;
-                updated++;
+                progress?.Report($"Importowanie firmy: {name}");
+                Customer current;
+                if (id.Length > 0 && byId.TryGetValue(id, out var foundById))
+                {
+                    current = foundById;
+                    updated++;
+                }
+                else if (email.Length > 0 && byEmail.TryGetValue(email, out var foundByEmail))
+                {
+                    current = foundByEmail;
+                    updated++;
+                }
+                else if (byName.TryGetValue(name, out var foundByName))
+                {
+                    current = foundByName;
+                    updated++;
+                }
+                else
+                {
+                    current = new Customer();
+                    added++;
+                }
+                var password = Get("haslo_zip");
+                var protectedPassword = password.Length == 0 ? current.ZipPasswordProtected : secrets.Protect(password);
+                var requestedActive = ParseBool(Get("aktywny"));
+                var customer = current with
+                {
+                    Name = name,
+                    Email = email,
+                    Subject = Get("temat"),
+                    Body = Get("tresc"),
+                    SourceDirectory = Get("katalog"),
+                    Active = requestedActive && email.Length > 0 && protectedPassword.Length > 0,
+                    ZipPasswordProtected = protectedPassword
+                };
+                Validation.Customer(customer);
+                result.Add(customer);
+                byId[customer.Id] = customer;
+                if (!string.IsNullOrWhiteSpace(customer.Email)) byEmail[customer.Email.Trim()] = customer;
+                byName[customer.Name.Trim()] = customer;
             }
-            else if (email.Length > 0 && byEmail.TryGetValue(email, out var foundByEmail))
+            catch (Exception exception)
             {
-                current = foundByEmail;
-                updated++;
+                throw new UserException($"CSV wiersz {rowNo + 1}: {ErrorMessages.ForCustomer(name, exception)}", exception);
             }
-            else if (byName.TryGetValue(name, out var foundByName))
-            {
-                current = foundByName;
-                updated++;
-            }
-            else
-            {
-                current = new Customer();
-                added++;
-            }
-            var password = Get("haslo_zip");
-            var protectedPassword = password.Length == 0 ? current.ZipPasswordProtected : secrets.Protect(password);
-            var requestedActive = ParseBool(Get("aktywny"));
-            var customer = current with
-            {
-                Name = name,
-                Email = email,
-                Subject = Get("temat"),
-                Body = Get("tresc"),
-                SourceDirectory = Get("katalog"),
-                Active = requestedActive && email.Length > 0 && protectedPassword.Length > 0,
-                ZipPasswordProtected = protectedPassword
-            };
-            try { Validation.Customer(customer); }
-            catch (UserException ex) { throw new UserException($"CSV wiersz {rowNo + 1}: {ex.Message}"); }
-            result.Add(customer);
-            byId[customer.Id] = customer;
-            if (!string.IsNullOrWhiteSpace(customer.Email)) byEmail[customer.Email.Trim()] = customer;
-            byName[customer.Name.Trim()] = customer;
         }
         return new CsvImportResult(added, updated, result);
     }

@@ -317,12 +317,172 @@ public sealed class CoreTests
         Assert.Equal("nowe-haslo", workspace.Secrets.Unprotect(company.ZipPasswordProtected));
     }
 
+    [Fact]
+    public void MultipleScheduleTimesAreSortedDeduplicatedAndStored()
+    {
+        using var workspace = new TestWorkspace();
+        var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "16:30; 09:00, 13:00 09:00" };
+        Validation.Settings(settings);
+        workspace.Repository.SaveSettings(settings);
+        var saved = workspace.Repository.Settings();
+        Assert.Equal(new[] { new TimeOnly(9, 0), new TimeOnly(13, 0), new TimeOnly(16, 30) }, saved.GetScheduleTimes());
+        Assert.False(saved.IsDue(new DateTime(2026, 10, 16, 8, 59, 0)));
+        Assert.Equal(new DateTime(2026, 10, 16, 9, 0, 0), saved.DueAt(new DateTime(2026, 10, 16, 12, 59, 0)));
+        Assert.Equal(new DateTime(2026, 10, 16, 13, 0, 0), saved.DueAt(new DateTime(2026, 10, 16, 13, 0, 0)));
+        Assert.Equal(new DateTime(2026, 10, 16, 16, 30, 0), saved.DueAt(new DateTime(2026, 10, 16, 23, 59, 0)));
+        Assert.False(saved.IsDue(new DateTime(2026, 10, 17, 0, 0, 0)));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" , ; ")]
+    [InlineData("09:00, 24:00")]
+    [InlineData("09:00, 9:30")]
+    [InlineData("09:00, 13:60")]
+    public void InvalidScheduleTimesAreRejected(string times)
+    {
+        using var workspace = new TestWorkspace();
+        Assert.Throws<UserException>(() => Validation.Settings(workspace.Settings with { ScheduleTime = times }));
+    }
+
+    [Fact]
+    public void ExistingSingleTimeSettingsRemainCompatible()
+    {
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("""{"ScheduleEnabled":true,"ScheduleTime":"07:45"}""")!;
+        Assert.Equal(new TimeOnly(7, 45), Assert.Single(legacy.GetScheduleTimes()));
+        Assert.True(legacy.IsDue(new DateTime(2026, 10, 16, 7, 45, 0)));
+    }
+
+    [Fact]
+    public void WindowsTaskContainsEachConfiguredTimeOnceAndKeepsNegativeAndLogonTriggers()
+    {
+        var settings = new AppSettings { ScheduleTime = "16:30, 09:00, 13:00, 09:00" };
+        var document = WindowsScheduler.BuildTaskXml(settings, @"C:\MP Mail\MpMail.exe", "S-1-test");
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+        var daily = document.Descendants(ns + "CalendarTrigger").Where(trigger => trigger.Element(ns + "Repetition") == null);
+        Assert.Equal(new[] { "2020-01-01T09:00:00", "2020-01-01T13:00:00", "2020-01-01T16:30:00" },
+            daily.Select(trigger => trigger.Element(ns + "StartBoundary")!.Value));
+        Assert.Single(document.Descendants(ns + "Repetition"));
+        Assert.Single(document.Descendants(ns + "LogonTrigger"));
+    }
+
+    [Fact]
+    public async Task MultipleDailySlotsSendNewDocumentsOncePerSlotAndKeepTemplateDates()
+    {
+        using var workspace = new TestWorkspace();
+        var customer = workspace.Customer with { Subject = "{data} / {miesiac}" };
+        workspace.Repository.SaveCustomer(customer);
+        workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00, 13:00" });
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "morning");
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 8, 59, 0), CancellationToken.None);
+        Assert.Equal(0, sender.Count);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 9, 0, 0), CancellationToken.None);
+        Assert.Equal(1, sender.Count);
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "afternoon");
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 12, 59, 0), CancellationToken.None);
+        Assert.Equal(1, sender.Count);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 13, 0, 0), CancellationToken.None);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 13, 1, 0), CancellationToken.None);
+        Assert.Equal(2, sender.Count);
+        Assert.All(sender.Messages, mail => Assert.Equal("2026-10-16 / 2026-10", mail.Subject));
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "SCHED-2026-10-16-1300", "orzeczenie-profilaktyczne-p1-002.pdf")));
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-003.pdf"), "tomorrow");
+        await service.RunScheduledAsync(new DateTime(2026, 10, 17, 9, 0, 0), CancellationToken.None);
+        Assert.Equal(3, sender.Count);
+    }
+
+    [Fact]
+    public async Task MissedSlotsCatchUpOnlyTheMostRecentAndRespectUncertainStatus()
+    {
+        using var workspace = new TestWorkspace();
+        var customer = workspace.Customer;
+        workspace.Repository.SaveCustomer(customer);
+        workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00, 13:00, 16:00" });
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "document");
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 15, 0, 0), CancellationToken.None);
+        Assert.Equal("SCHED-2026-10-16-1300", Assert.Single(sender.Messages).Period);
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "later document");
+        workspace.Repository.Finish(customer, "SCHED-2026-10-16-1600", DeliveryStatus.Uncertain, "unknown", "message-test");
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 16, 0, 0), CancellationToken.None);
+        Assert.Equal(1, sender.Count);
+    }
+
+    [Theory]
+    [InlineData("bad-email", "1")]
+    [InlineData("valid@example.test", "maybe")]
+    public void CsvRowErrorsIncludeCompanyNameAndRow(string email, string active)
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Root, "invalid.csv");
+        File.WriteAllText(path, CustomerCsv.Header + "\n" +
+            $";Firma z błędem;{email};Temat;Treść;{workspace.Source};secret;{active}\n");
+        var exception = Assert.Throws<UserException>(() => CustomerCsv.Import(path, [], workspace.Secrets));
+        Assert.Contains("Firma z błędem", ErrorMessages.Describe(exception));
+        Assert.Contains("wiersz 2", exception.Message);
+        Assert.DoesNotContain("secret", exception.Message);
+    }
+
+    [Fact]
+    public void BulkSaveErrorNamesTheCompanyAndRollsBackEarlierRows()
+    {
+        using var workspace = new TestWorkspace();
+        var first = workspace.Customer with { Name = "Poprawna firma" };
+        var invalid = workspace.Customer with { Name = "Błędna firma", Email = "invalid" };
+        var exception = Assert.Throws<UserException>(() => workspace.Repository.SaveCustomers([first, invalid]));
+        Assert.Contains("Błędna firma", ErrorMessages.Describe(exception));
+        Assert.Empty(workspace.Repository.Customers());
+    }
+
+    [Theory]
+    [InlineData(DeliveryStatus.Pending)]
+    [InlineData(DeliveryStatus.Uncertain)]
+    public async Task UnresolvedEarlierDeliveryBlocksLaterSlotsForTheSameDay(DeliveryStatus status)
+    {
+        using var workspace = new TestWorkspace();
+        var customer = workspace.Customer;
+        workspace.Repository.SaveCustomer(customer);
+        workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00, 13:00" });
+        workspace.Repository.Finish(customer, "2026-10-16", status, "unresolved", "earlier-message");
+        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "document");
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 16, 13, 0, 0), CancellationToken.None);
+        Assert.Empty(sender.Messages);
+        await service.RunScheduledAsync(new DateTime(2026, 10, 17, 9, 0, 0), CancellationToken.None);
+        Assert.Single(sender.Messages);
+    }
+
+    [Fact]
+    public void DatabaseSaveFailureIncludesCompanyAndKeepsImportAtomic()
+    {
+        using var workspace = new TestWorkspace();
+        var first = workspace.Customer with { Name = "Firma poprawna" };
+        var rejected = workspace.Customer with { Name = "Firma odrzucona" };
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(workspace.Root, "data.db")}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"CREATE TRIGGER RejectCompany BEFORE INSERT ON Customers WHEN NEW.Id='{rejected.Id}' BEGIN SELECT RAISE(ABORT, 'test failure'); END;";
+            command.ExecuteNonQuery();
+        }
+        var exception = Assert.Throws<UserException>(() => workspace.Repository.SaveCustomers([first, rejected]));
+        Assert.Contains("Firma odrzucona", ErrorMessages.Describe(exception));
+        Assert.IsType<Microsoft.Data.Sqlite.SqliteException>(exception.InnerException);
+        Assert.Empty(workspace.Repository.Customers());
+    }
+
     private sealed class RecordingSender : IMailSender
     {
         public int Count { get; private set; }
+        public List<PreparedMail> Messages { get; } = [];
         public Task<SendOutcome> SendAsync(AppSettings settings, PreparedMail mail, string messageId, CancellationToken cancellationToken)
         {
             Count++;
+            Messages.Add(mail);
             return Task.FromResult(new SendOutcome(DeliveryStatus.Success, "accepted"));
         }
     }

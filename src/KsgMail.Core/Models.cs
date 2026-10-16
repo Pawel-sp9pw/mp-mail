@@ -35,9 +35,24 @@ public sealed record AppSettings
     public int NegativeIntervalMinutes { get; init; } = 15;
     public int ArchiveRetentionDays { get; init; } = 90;
 
+    public IReadOnlyList<TimeOnly> GetScheduleTimes()
+    {
+        var values = ScheduleTime.Split([',', ';', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        if (values.Length == 0) throw new UserException("Podaj co najmniej jedną godzinę wysyłki w formacie HH:mm.");
+        var times = new List<TimeOnly>();
+        foreach (var value in values)
+        {
+            if (!TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
+                throw new UserException($"Niepoprawna godzina „{value}”. Użyj HH:mm, np. 09:00, 13:00, 16:30.");
+            times.Add(time);
+        }
+        return times.Distinct().Order().ToList();
+    }
+
     public DateTime DueAt(DateTime localNow)
     {
-        var time = TimeOnly.ParseExact(ScheduleTime, "HH:mm", CultureInfo.InvariantCulture);
+        var times = GetScheduleTimes();
+        var time = times.Where(value => value <= TimeOnly.FromDateTime(localNow)).DefaultIfEmpty(times[0]).Last();
         return new(localNow.Year, localNow.Month, localNow.Day, time.Hour, time.Minute, 0);
     }
 
@@ -77,8 +92,7 @@ public static class Validation
         Require(settings.MaxAttachmentMb is >= 1 and <= 100, "Limit ZIP: 1–100 MB.");
         Require(settings.MaxSourceMb is >= 1 and <= 2048, "Limit plików źródłowych: 1–2048 MB.");
         Require(settings.RetryCount is >= 1 and <= 5, "Liczba prób SMTP: 1–5.");
-        Require(TimeOnly.TryParseExact(settings.ScheduleTime, "HH:mm", CultureInfo.InvariantCulture,
-            DateTimeStyles.None, out _), "Godzina musi mieć format HH:mm.");
+        settings.GetScheduleTimes();
         Require(settings.NegativeIntervalMinutes is >= 1 and <= 1440, "Interwał NEG: 1–1440 minut.");
         Require(settings.ArchiveRetentionDays is >= 1 and <= 3650, "Retencja archiwum: 1–3650 dni.");
     }
@@ -96,7 +110,7 @@ public static class Validation
     }
 }
 
-public sealed class UserException(string message) : Exception(message);
+public sealed class UserException(string message, Exception? innerException = null) : Exception(message, innerException);
 
 public static class Templates
 {

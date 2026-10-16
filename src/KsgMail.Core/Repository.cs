@@ -55,21 +55,38 @@ public sealed class Repository
             ("$id", customer.Id), ("$data", JsonSerializer.Serialize(customer)));
     }
 
-    public void SaveCustomers(IEnumerable<Customer> customers)
+    public void SaveCustomers(IEnumerable<Customer> customers, IProgress<string>? progress = null)
     {
-        using var connection = Open();
-        using var transaction = connection.BeginTransaction();
-        foreach (var customer in customers)
+        var batch = customers.ToList();
+        try
         {
-            Validation.Customer(customer);
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = "INSERT INTO Customers VALUES($id,$data) ON CONFLICT(Id) DO UPDATE SET Data=$data";
-            command.Parameters.AddWithValue("$id", customer.Id);
-            command.Parameters.AddWithValue("$data", JsonSerializer.Serialize(customer));
-            command.ExecuteNonQuery();
+            using var connection = Open();
+            using var transaction = connection.BeginTransaction();
+            foreach (var customer in batch)
+            {
+                try
+                {
+                    progress?.Report($"Zapisywanie firmy: {customer.Name}");
+                    Validation.Customer(customer);
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = "INSERT INTO Customers VALUES($id,$data) ON CONFLICT(Id) DO UPDATE SET Data=$data";
+                    command.Parameters.AddWithValue("$id", customer.Id);
+                    command.Parameters.AddWithValue("$data", JsonSerializer.Serialize(customer));
+                    command.ExecuteNonQuery();
+                }
+                catch (Exception exception)
+                {
+                    throw new UserException(ErrorMessages.ForCustomer(customer.Name, exception), exception);
+                }
+            }
+            transaction.Commit();
         }
-        transaction.Commit();
+        catch (UserException) { throw; }
+        catch (Exception exception)
+        {
+            throw new UserException($"Nie zapisano firm: {string.Join(", ", batch.Select(customer => customer.Name))}. {ErrorMessages.Describe(exception)}", exception);
+        }
     }
 
     public void DeleteCustomer(string id) => Execute("DELETE FROM Customers WHERE Id=$id", ("$id", id));
@@ -98,6 +115,20 @@ public sealed class Repository
         command.Parameters.AddWithValue("$period", period);
         return command.ExecuteScalar() is string status &&
             status is nameof(DeliveryStatus.Success) or nameof(DeliveryStatus.Pending) or nameof(DeliveryStatus.Uncertain);
+    }
+
+    public bool HasUnresolvedScheduledDelivery(string customerId, string day)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS(SELECT 1 FROM Dispatch WHERE CustomerId=$id
+                AND (Period=$day OR Period LIKE $slots) AND Status IN ('Pending','Uncertain'))
+            """;
+        command.Parameters.AddWithValue("$id", customerId);
+        command.Parameters.AddWithValue("$day", day);
+        command.Parameters.AddWithValue("$slots", $"SCHED-{day}-%");
+        return Convert.ToInt64(command.ExecuteScalar()) != 0;
     }
 
     public bool Reserve(Customer customer, string period, string messageId, bool allowResend)
