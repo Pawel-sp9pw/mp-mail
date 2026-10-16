@@ -152,6 +152,24 @@ public sealed class CoreTests
     }
 
     [Fact]
+    public void CsvImportAcceptsCommaSeparatedHeaderAndQuotedCommas()
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Root, "companies-comma.csv");
+        File.WriteAllText(path,
+            "id,nazwa,email,temat,tresc,katalog,haslo_zip,aktywny\n" +
+            $",Firma testowa,test@example.test,Dokumenty,\"Treść, z przecinkiem\",{workspace.Source},sekret,1\n");
+
+        var result = CustomerCsv.Import(path, [], workspace.Secrets);
+
+        var company = Assert.Single(result.Customers);
+        Assert.Equal("Firma testowa", company.Name);
+        Assert.Equal("Treść, z przecinkiem", company.Body);
+        Assert.Equal("sekret", workspace.Secrets.Unprotect(company.ZipPasswordProtected));
+        Assert.True(company.Active);
+    }
+
+    [Fact]
     public void CsvNewCompanyRequiresZipPassword()
     {
         using var workspace = new TestWorkspace();
