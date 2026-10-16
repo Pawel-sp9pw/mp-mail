@@ -61,7 +61,8 @@ public static class Validation
         Require(!customer.Subject.Contains('\r') && !customer.Subject.Contains('\n'), "Temat nie może zawierać nowych linii.");
         Require(!string.IsNullOrWhiteSpace(customer.Body), "Podaj treść wiadomości.");
         Require(Path.IsPathFullyQualified(customer.SourceDirectory), "Wybierz bezwzględną ścieżkę katalogu.");
-        Require(!string.IsNullOrEmpty(customer.ZipPasswordProtected), "Ustaw hasło ZIP.");
+        if (customer.Active)
+            Require(!string.IsNullOrEmpty(customer.ZipPasswordProtected), "Ustaw hasło ZIP.");
     }
 
     public static void Settings(AppSettings settings)
