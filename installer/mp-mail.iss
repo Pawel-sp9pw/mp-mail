@@ -33,7 +33,7 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Name: "{group}\Wysyłka masowa z medycyny pracy"; Filename: "{app}\MpMail.exe"
 Name: "{autodesktop}\Wysyłka masowa z medycyny pracy"; Filename: "{app}\MpMail.exe"; Tasks: desktopicon
 [Run]
-Filename: "{app}\MpMail.exe"; Description: "Uruchom Wysyłkę masową z medycyny pracy"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\MpMail.exe"; Description: "Uruchom Wysyłkę masową z medycyny pracy"; Flags: nowait postinstall
 [Code]
 function GetCurrentUserSid: String;
 var

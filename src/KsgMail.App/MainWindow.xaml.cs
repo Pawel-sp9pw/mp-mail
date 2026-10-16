@@ -413,7 +413,7 @@ public partial class MainWindow : Window
         }
 
         if (MessageBox.Show(this,
-                $"Pobrać i zainstalować MP Mail {update.LatestVersion.ToString(3)}?\n\nPo weryfikacji instalatora aplikacja zostanie zamknięta.",
+                $"Pobrać i zainstalować MP Mail {update.LatestVersion.ToString(3)}?\n\nPo weryfikacji instalatora aplikacja zostanie zamknięta. Po pomyślnej aktualizacji MP Mail uruchomi się automatycznie.",
                 "Aktualizacja MP Mail", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 

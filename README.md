@@ -72,10 +72,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.8.0
+.\build.ps1 -Version 0.8.1
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.8.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.8.1-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
@@ -89,6 +89,11 @@ Jeśli dostępna jest nowsza wersja, aplikacja:
 2. pobiera `SHA256SUMS.txt` z tego samego wydania,
 3. weryfikuje SHA-256 instalatora,
 4. uruchamia instalator dopiero po poprawnej weryfikacji,
-5. zamyka MP Mail, aby instalator mógł bezpiecznie zastąpić pliki programu.
+5. zamyka MP Mail, aby instalator mógł bezpiecznie zastąpić pliki programu,
+6. po pomyślnej instalacji uruchamia zainstalowany `MpMail.exe` automatycznie, również w trybie `/SILENT` i `/VERYSILENT`.
+
+Uruchomienie jest wykonywane przez sekcję `[Run]` instalatora dopiero po udanej instalacji. W razie błędu instalacji program nie jest uruchamiany. Zmiana działa także podczas aktualizacji ze starszej wersji MP Mail, ponieważ odpowiada za nią pobrany instalator. W instalacji z kreatorem nadal można odznaczyć uruchomienie programu na ekranie końcowym.
+
+Test `tests/Test-InstallerRestart.ps1` buduje instalator z niewysyłającą maili aplikacją testową i sprawdza oba tryby cichej instalacji: jedno uruchomienie z docelowego katalogu po sukcesie oraz brak uruchomienia po błędzie zapisu dodatkowego pliku, gdy w katalogu znajduje się już działająca poprzednia instalacja. Test używa osobnego identyfikatora instalatora i katalogów pod `artifacts/installer-tests`, bez skrótów i wpisu deinstalacji. Jest wykonywany przed publikacją wydania w GitHub Actions oraz podczas `build.ps1`.
 
 Nie jest używany żaden zewnętrzny serwer aktualizacji poza GitHub Releases projektu.

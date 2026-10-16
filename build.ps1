@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.8.0",
+    [string]$Version = "0.8.1",
     [string]$InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
 $ErrorActionPreference = "Stop"
@@ -16,6 +16,7 @@ Invoke-Checked dotnet @("publish", "src/KsgMail.App/KsgMail.App.csproj", "-c", "
     "-r", "win-x64", "--self-contained", "true", "-o", "artifacts/publish",
     "-p:Version=$Version", "-p:PublishSingleFile=false")
 if (!(Test-Path -LiteralPath $InnoCompiler)) { throw "Zainstaluj Inno Setup 6 lub podaj -InnoCompiler." }
+& "$PSScriptRoot/tests/Test-InstallerRestart.ps1" -InnoCompiler $InnoCompiler
 Invoke-Checked $InnoCompiler @("/DAppVersion=$Version", "installer/mp-mail.iss")
 Compress-Archive -Path artifacts/publish/* -DestinationPath "artifacts/MpMail-$Version-win-x64.zip" -Force
 Get-ChildItem artifacts/installer/*.exe, artifacts/*.zip | ForEach-Object {
