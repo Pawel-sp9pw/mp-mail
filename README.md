@@ -5,6 +5,8 @@ Aplikacja Windows do codziennej wysyłki dokumentów do firm przez SMTP. Jest to
 ## Najważniejsze funkcje
 
 - konfiguracja firm: nazwa, e-mail, temat, indywidualna treść, katalog dokumentów, hasło ZIP, aktywna/nieaktywna;
+- filtrowanie firm po nazwie/e-mailu oraz statusie aktywna/nieaktywna;
+- wielokrotny wybór firm, zaznaczanie wszystkich widocznych i operacje masowe: aktywacja, dezaktywacja i usuwanie;
 - skanowanie wyłącznie plików bezpośrednio w katalogu firmy — podkatalogi nie są przeszukiwane;
 - zwykła wysyłka zbiorcza obejmuje `orzeczenie-profilaktyczne-p1*.pdf`, ale z wyłączeniem plików z prefiksem `NEG.`;
 - pliki `NEG.orzeczenie-profilaktyczne-p1*.pdf` są pakowane osobno do szyfrowanego ZIP i wysyłane według konfigurowalnego interwału (domyślnie co 15 minut);
@@ -70,10 +72,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.7.1
+.\build.ps1 -Version 0.8.0
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.7.1-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.8.0-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
