@@ -269,22 +269,52 @@ public sealed class CoreTests
     }
 
     [Fact]
-    public void CsvNewCompanyRequiresZipPassword()
+    public void CsvNewCompanyWithoutZipPasswordImportsAsInactive()
     {
         using var workspace = new TestWorkspace();
         var path = Path.Combine(workspace.Root, "new.csv");
         File.WriteAllText(path,
             "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
             $";Nowa firma;new@example.test;Dokumenty;Treść;{workspace.Source};;1\n");
-        Assert.Throws<UserException>(() => { CustomerCsv.Import(path, [], workspace.Secrets); });
 
+        var result = CustomerCsv.Import(path, [], workspace.Secrets);
+
+        var company = Assert.Single(result.Customers);
+        Assert.False(company.Active);
+        Assert.Equal("", company.ZipPasswordProtected);
+        Assert.Equal(1, result.Added);
+    }
+
+    [Fact]
+    public void CsvNewCompanyWithoutEmailImportsAsInactive()
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Root, "new-no-email.csv");
+        File.WriteAllText(path,
+            "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
+            $";Nowa firma;;Dokumenty;Treść;{workspace.Source};nowe-haslo;1\n");
+
+        var result = CustomerCsv.Import(path, [], workspace.Secrets);
+
+        var company = Assert.Single(result.Customers);
+        Assert.False(company.Active);
+        Assert.Equal("nowe-haslo", workspace.Secrets.Unprotect(company.ZipPasswordProtected));
+    }
+
+    [Fact]
+    public void CsvNewCompanyWithEmailAndZipPasswordCanStayActive()
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Root, "new-active.csv");
         File.WriteAllText(path,
             "id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny\n" +
             $";Nowa firma;new@example.test;Dokumenty;Treść;{workspace.Source};nowe-haslo;1\n");
+
         var result = CustomerCsv.Import(path, [], workspace.Secrets);
+
         var company = Assert.Single(result.Customers);
+        Assert.True(company.Active);
         Assert.Equal("nowe-haslo", workspace.Secrets.Unprotect(company.ZipPasswordProtected));
-        Assert.Equal(1, result.Added);
     }
 
     private sealed class RecordingSender : IMailSender
