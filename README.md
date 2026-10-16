@@ -26,7 +26,7 @@ Separator: średnik, kodowanie UTF-8. Kolumny:
 id;nazwa;email;temat;tresc;katalog;haslo_zip;aktywny
 ```
 
-Eksport celowo pozostawia `haslo_zip` puste — hasła nie są eksportowane w jawnej postaci. Przy ponownym imporcie istniejącej firmy puste `haslo_zip` zachowuje hasło zapisane lokalnie. Nowa firma musi mieć hasło podane w CSV.
+Eksport celowo pozostawia `haslo_zip` puste — hasła nie są eksportowane w jawnej postaci. Przy ponownym imporcie istniejącej firmy puste `haslo_zip` zachowuje hasło zapisane lokalnie. Jeżeli nowa firma nie ma e-maila lub hasła ZIP, zostanie zaimportowana jako nieaktywna. Przy ponownym imporcie istniejącej firmy puste `haslo_zip` nadal zachowuje hasło zapisane lokalnie.
 
 Kolumna `aktywny`: `1/0`, `tak/nie`, `true/false`.
 
@@ -70,10 +70,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.7.0
+.\build.ps1 -Version 0.7.1
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.7.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.7.1-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
