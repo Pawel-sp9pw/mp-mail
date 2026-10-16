@@ -28,6 +28,11 @@ public static class CustomerCsv
         foreach (var name in required)
             if (!header.Contains(name)) throw new UserException($"CSV: brak kolumny '{name}'.");
         var byId = existing.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
+        var byEmail = existing.Where(x => !string.IsNullOrWhiteSpace(x.Email))
+            .GroupBy(x => x.Email.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var byName = existing.GroupBy(x => x.Name.Trim(), StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.CurrentCultureIgnoreCase);
         var result = new List<Customer>();
         int added = 0, updated = 0;
         for (int rowNo = 1; rowNo < rows.Count; rowNo++)
@@ -40,10 +45,22 @@ public static class CustomerCsv
                 return index >= 0 && index < row.Count ? row[index].Trim() : "";
             }
             var id = Get("id");
+            var name = Get("nazwa");
+            var email = Get("email");
             Customer current;
-            if (id.Length > 0 && byId.TryGetValue(id, out var found))
+            if (id.Length > 0 && byId.TryGetValue(id, out var foundById))
             {
-                current = found;
+                current = foundById;
+                updated++;
+            }
+            else if (email.Length > 0 && byEmail.TryGetValue(email, out var foundByEmail))
+            {
+                current = foundByEmail;
+                updated++;
+            }
+            else if (byName.TryGetValue(name, out var foundByName))
+            {
+                current = foundByName;
                 updated++;
             }
             else
@@ -54,8 +71,8 @@ public static class CustomerCsv
             var password = Get("haslo_zip");
             var customer = current with
             {
-                Name = Get("nazwa"),
-                Email = Get("email"),
+                Name = name,
+                Email = email,
                 Subject = Get("temat"),
                 Body = Get("tresc"),
                 SourceDirectory = Get("katalog"),
@@ -67,6 +84,9 @@ public static class CustomerCsv
             try { Validation.Customer(customer); }
             catch (UserException ex) { throw new UserException($"CSV wiersz {rowNo + 1}: {ex.Message}"); }
             result.Add(customer);
+            byId[customer.Id] = customer;
+            if (!string.IsNullOrWhiteSpace(customer.Email)) byEmail[customer.Email.Trim()] = customer;
+            byName[customer.Name.Trim()] = customer;
         }
         return new CsvImportResult(added, updated, result);
     }
@@ -74,7 +94,7 @@ public static class CustomerCsv
     private static bool ParseBool(string value) => value.Trim().ToLowerInvariant() switch
     {
         "1" or "true" or "tak" or "yes" => true,
-        "0" or "false" or "nie" or "no" => false,
+        "" or "0" or "false" or "nie" or "no" => false,
         _ => throw new UserException($"CSV: niepoprawna wartość aktywny '{value}'. Użyj 1/0, tak/nie albo true/false.")
     };
 
