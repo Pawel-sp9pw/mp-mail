@@ -93,7 +93,38 @@ public sealed class ArchiveService(ISecretProtector secrets)
             Directory.CreateDirectory(destinationDirectory);
             destination = UniqueDestination(destination);
             File.Move(source, destination);
+            File.SetLastWriteTimeUtc(destination, DateTime.UtcNow);
         }
+    }
+
+    public int PurgeExpired(string sourceDirectory, int retentionDays, DateTime utcNow)
+    {
+        var archiveRoot = Path.Combine(Path.GetFullPath(sourceDirectory), SentArchiveDirectoryName);
+        if (!Directory.Exists(archiveRoot)) return 0;
+        RejectLink(archiveRoot);
+
+        var cutoff = utcNow.AddDays(-retentionDays);
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = false,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        var deleted = 0;
+        foreach (var path in Directory.EnumerateFiles(archiveRoot, "*", options))
+        {
+            if (File.GetLastWriteTimeUtc(path) >= cutoff) continue;
+            File.Delete(path);
+            deleted++;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(archiveRoot, "*", options)
+                     .OrderByDescending(path => path.Length))
+        {
+            if (!Directory.EnumerateFileSystemEntries(directory).Any())
+                Directory.Delete(directory);
+        }
+        return deleted;
     }
 
     private static string UniqueDestination(string path)
