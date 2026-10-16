@@ -19,7 +19,9 @@ public static class CustomerCsv
 
     public static CsvImportResult Import(string path, IReadOnlyList<Customer> existing, ISecretProtector secrets)
     {
-        var rows = Parse(File.ReadAllText(path, Encoding.UTF8));
+        var text = File.ReadAllText(path, Encoding.UTF8);
+        var delimiter = DetectDelimiter(text);
+        var rows = Parse(text, delimiter);
         if (rows.Count == 0) throw new UserException("Plik CSV jest pusty.");
         var header = rows[0].Select(x => x.Trim().ToLowerInvariant()).ToList();
         string[] required = ["nazwa", "email", "temat", "tresc", "katalog", "haslo_zip", "aktywny"];
@@ -83,7 +85,23 @@ public static class CustomerCsv
         return quote + value.Replace(quote, quote + quote) + quote;
     }
 
-    private static List<List<string>> Parse(string text)
+    private static char DetectDelimiter(string text)
+    {
+        bool quoted = false;
+        int semicolons = 0, commas = 0;
+        foreach (var ch in text)
+        {
+            if (ch == '"') quoted = !quoted;
+            else if (!quoted && ch == ';') semicolons++;
+            else if (!quoted && ch == ',') commas++;
+            else if (!quoted && (ch == '\r' || ch == '\n')) break;
+        }
+        if (semicolons == 0 && commas == 0)
+            throw new UserException("CSV: nie można rozpoznać separatora kolumn. Użyj średnika lub przecinka.");
+        return semicolons >= commas ? ';' : ',';
+    }
+
+    private static List<List<string>> Parse(string text, char delimiter)
     {
         var rows = new List<List<string>>();
         var row = new List<string>();
@@ -101,7 +119,7 @@ public static class CustomerCsv
             else
             {
                 if (ch == '"') quoted = true;
-                else if (ch == ';') { row.Add(field.ToString()); field.Clear(); }
+                else if (ch == delimiter) { row.Add(field.ToString()); field.Clear(); }
                 else if (ch == '\r') { }
                 else if (ch == '\n') { row.Add(field.ToString()); field.Clear(); rows.Add(row); row = new List<string>(); }
                 else field.Append(ch);
