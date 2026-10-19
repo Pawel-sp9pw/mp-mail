@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MpMail</AssemblyName>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../KsgMail.Core/KsgMail.Core.csproj" /></ItemGroup>

@@ -94,7 +94,7 @@
        <TextBlock Text="Np. 09:00, 13:00, 16:30. Możesz podać jedną lub więcej godzin." TextWrapping="Wrap" Foreground="#526477"/>
        <TextBlock Text="Interwał wysyłki NEG (minuty, domyślnie 15)" Margin="0,8,0,0"/><TextBox x:Name="NegativeIntervalMinutes"/>
        <TextBlock Text="Retencja archiwum (dni, domyślnie 90)" Margin="0,8,0,0"/><TextBox x:Name="ArchiveRetentionDays"/>
-       <TextBlock Text="Zwykłe orzeczenia są wysyłane zbiorczo o każdej ustawionej godzinie. W jednym terminie firma otrzyma najwyżej jedną wysyłkę; nowe dokumenty mogą zostać wysłane w kolejnym terminie. Po przerwie nadrabiany jest ostatni osiągnięty termin. Pliki NEG.orzeczenie-profilaktyczne-p1*.pdf są sprawdzane i wysyłane osobno co ustawiony interwał. Pliki w archiwum starsze niż ustawiony okres retencji są automatycznie usuwane. Uwzględniane są tylko pliki bezpośrednio w katalogu firmy — podkatalogi są pomijane." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
+       <TextBlock Text="Zwykłe orzeczenia są wysyłane jedną partią dla wszystkich kwalifikujących się firm. Partia rozpoczyna się tylko w ustawionej minucie, np. 13:00; jej wysłanie może potrwać dłużej. Pominięte terminy nie są nadrabiane po uruchomieniu, aktualizacji ani wybudzeniu. Nowe pliki dodane po zebraniu partii czekają na następny termin. Każda firma otrzymuje własną wiadomość i ZIP. Wyłącznie pliki NEG.orzeczenie-profilaktyczne-p1*.pdf są wysyłane osobno co ustawiony interwał. Pliki w archiwum starsze niż ustawiony okres retencji są automatycznie usuwane. Uwzględniane są tylko pliki bezpośrednio w katalogu firmy — podkatalogi są pomijane." TextWrapping="Wrap" Foreground="#526477" Margin="0,8"/>
       </StackPanel>
      </Grid>
     </ScrollViewer>

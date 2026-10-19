@@ -45,15 +45,21 @@ Zadanie uruchamia `MpMail.exe --scheduled`:
 - cyklicznie zgodnie z interwałem NEG (domyślnie co 15 minut);
 - przy logowaniu użytkownika.
 
-Automat działa przy zablokowanym ekranie, jeśli użytkownik pozostaje zalogowany. Program nie musi mieć widocznego okna. Jeżeli MP Mail jest otwarty, uruchomienie `--scheduled` przekazuje żądanie do działającej instancji. Żądanie czeka na zakończenie trwającej operacji, a następnie wymusza sprawdzenie harmonogramu. Pozostawiony podgląd nie zatrzymuje automatu: przed automatyczną wysyłką zostaje wyczyszczony, aby nie można było ręcznie wysłać nieaktualnego ZIP. Podgląd pozostaje dostępny, gdy automat nie ma nic do wysłania. Wysyłka zbiorcza jest sprawdzana przed partią NEG.
+Automat działa przy zablokowanym ekranie, jeśli użytkownik pozostaje zalogowany. Program nie musi mieć widocznego okna. Jeżeli MP Mail jest otwarty, uruchomienie `--scheduled` przekazuje żądanie do działającej instancji. Żądanie czeka na zakończenie trwającej operacji, a następnie wymusza sprawdzenie harmonogramu. Jeśli ustawiona minuta już minęła, zwykła partia nie zostanie rozpoczęta. Pozostawiony podgląd nie zatrzymuje automatu: przed automatyczną wysyłką zostaje wyczyszczony, aby nie można było ręcznie wysłać nieaktualnego ZIP. Podgląd pozostaje dostępny, gdy automat nie ma nic do wysłania. Wysyłka zbiorcza jest sprawdzana przed retencją i partią NEG.
 
-Zadanie Windows ma włączone `WakeToRun`; wybudzenie z uśpienia zależy również od ustawień zasilania i możliwości sprzętu. Po uruchomieniu okna MP Mail zadanie jest odświeżane automatycznie, więc aktualizacja obejmuje też istniejącą konfigurację. Wylogowanie użytkownika nadal uniemożliwia działanie zadania typu `InteractiveToken`. Program nie jest usługą Windows: wysyłka również po wylogowaniu wymaga osobnego wdrożenia konta usługi, dostępu do danych i haseł chronionych DPAPI CurrentUser.
+Zadanie Windows ma włączone `WakeToRun`; wybudzenie z uśpienia zależy również od ustawień zasilania i możliwości sprzętu. `StartWhenAvailable=false` wyłącza nadrabianie pominiętych uruchomień przez Windows. Niezależnie od źródła uruchomienia aplikacja dodatkowo sprawdza ustawioną minutę. Po uruchomieniu okna MP Mail zadanie jest odświeżane automatycznie, więc aktualizacja obejmuje też istniejącą konfigurację. Wylogowanie użytkownika nadal uniemożliwia działanie zadania typu `InteractiveToken`. Program nie jest usługą Windows: wysyłka również po wylogowaniu wymaga osobnego wdrożenia konta usługi, dostępu do danych i haseł chronionych DPAPI CurrentUser.
 
 Diagnostyka automatu jest zapisywana w `%LOCALAPPDATA%\MpMail\Logs\schedule-RRRR-MM-DD.log`. Zawiera uruchomienia zadania, przekazanie żądań do okna, godziny sprawdzenia, liczby firm gotowych do wysyłki i przyczyny pominięcia (nieaktywność, blokada powtórzenia, niepewny wynik, brak pasujących dokumentów/niedostępny katalog) oraz błędy. Log nie zawiera haseł. Szczegółowe wyniki SMTP pozostają w zakładce Historia. Brak wpisu w Historii nie oznacza już braku śladu diagnostycznego sprawdzenia harmonogramu.
 
 W polu **Godziny wysyłki zbiorczej** wpisz np. `09:00, 13:00, 16:30`. Godziny muszą mieć format `HH:mm`; można je rozdzielać przecinkiem, średnikiem lub spacją. Powtórzenia są usuwane, a godziny sortowane. Dotychczas zapisana pojedyncza godzina pozostaje poprawna.
 
-Podczas automatycznych uruchomień aplikacja najpierw wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Po osiągnięciu każdej skonfigurowanej godziny aplikacja wysyła nowe dokumenty do aktywnych firm, najwyżej raz dla danej firmy i terminu. Po przerwie w pracy komputera nadrabiany jest wyłącznie ostatni osiągnięty termin tego dnia. Trwająca lub niepewna wcześniejsza wysyłka zbiorcza blokuje pozostałe terminy tego samego dnia, aby nie powielać dokumentów. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<okres>/`: pierwszy termin zachowuje okres `RRRR-MM-DD`, kolejne używają `SCHED-RRRR-MM-DD-HHmm`. Dzięki temu wcześniejsze zapisy pojedynczej wysyłki nadal chronią pierwszy termin przed powtórzeniem. Program nie przeszukuje żadnych podkatalogów firmy. `orzeczenie-profilaktyczne-p1*.pdf` bez prefiksu `NEG.` są wysyłane zbiorczo według harmonogramu dziennego. `NEG.orzeczenie-profilaktyczne-p1*.pdf` są wysyłane wyłącznie w trybie interwałowym. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
+Zwykłe dokumenty są wysyłane wyłącznie jedną partią zbiorczą w każdym ustawionym terminie. Start jest dozwolony tylko w skonfigurowanej minucie: dla `13:00` od `13:00:00` do `13:00:59`. Od `13:01` partia nie zostanie rozpoczęta. Po aktualizacji, restarcie, logowaniu lub wybudzeniu pominięte terminy nie są nadrabiane. Rozpoczęta punktualnie partia może trwać dłużej niż minutę: wszystkie wiadomości i ZIP-y są przygotowywane przed wysłaniem pierwszej wiadomości. Każda firma otrzymuje własną wiadomość i ZIP; dokumenty różnych firm nie są łączone.
+
+Rejestr rozpoczęcia partii jest zapisywany atomowo w bazie, również gdy nie było dokumentów do wysłania. Kolejne sprawdzenie, ponowny sygnał Windows lub restart w tej samej minucie nie uruchamia dodatkowej partii. Nowe firmy i dokumenty dodane po zebraniu partii czekają na następny ustawiony termin. Nieudana wysyłka nie uruchamia kolejnego indywidualnego przebiegu w tym samym terminie; próby SMTP wewnątrz rozpoczętej partii zachowują skonfigurowany limit retry. Wyłącznie pliki `NEG.orzeczenie-profilaktyczne-p1*.pdf` mogą być wysyłane poza godzinami zbiorczymi, według osobnego interwału NEG.
+
+Po sprawdzeniu wysyłki zbiorczej aplikacja wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Trwająca lub niepewna wcześniejsza wysyłka zbiorcza blokuje pozostałe terminy tego samego dnia, aby nie powielać dokumentów. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<okres>/`: pierwszy termin zachowuje okres `RRRR-MM-DD`, kolejne używają `SCHED-RRRR-MM-DD-HHmm`. Dzięki temu wcześniejsze zapisy pojedynczej wysyłki nadal chronią pierwszy termin przed powtórzeniem. Program nie przeszukuje żadnych podkatalogów firmy. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
+
+Wersja 0.9.2 dodaje tylko tabelę `ScheduledBatches` z rejestrem partii (wersja schematu 2). Istniejące firmy, ustawienia, zaszyfrowane hasła, historia i blokady wysyłki pozostają zachowane. Przed aktualizacją produkcji należy wykonać kopię folderu danych przy zamkniętym programie i wyłączonym automacie; aktualizator nie wykonuje jej automatycznie.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -69,10 +75,13 @@ Testy automatyczne sprawdzają:
 - retencję archiwum, usuwanie przeterminowanych plików i pustych katalogów;
 - import/eksport CSV, cytowanie pól i nieeksportowanie hasła ZIP;
 - nazwy firm i numery wierszy w błędach importu oraz wycofanie zapisu przy błędzie firmy;
-- wiele godzin w zadaniu Windows, deduplikację i walidację godzin, nadrabianie ostatniego terminu oraz blokadę kolejnych terminów po niepewnej wysyłce;
+- wiele godzin w zadaniu Windows, deduplikację i walidację godzin, brak nadrabiania terminów oraz blokadę kolejnych terminów po niepewnej wysyłce;
 - wysyłkę o 12:00 i 18:00 z niewidocznym oknem i pozostawionym podglądem;
 - przekazanie sygnału zadania Windows do działającego okna, oczekiwanie na koniec operacji oraz brak duplikatów po powtórnym sygnale;
-- wybudzanie w XML zadania, priorytet wysyłki zbiorczej przed NEG i diagnostykę pustego przebiegu.
+- wybudzanie w XML zadania, priorytet wysyłki zbiorczej przed NEG i diagnostykę pustego przebiegu;
+- brak wysyłki zwykłych dokumentów poza skonfigurowaną minutą oraz zachowanie osobnego interwału NEG;
+- przygotowanie wszystkich ZIP-ów przed pierwszą wiadomością i brak dokładania firm/plików do zakończonej partii, również po restarcie;
+- atomową blokadę ponownego uruchomienia partii oraz zachowanie danych istniejącej bazy przy rozszerzeniu schematu.
 
 ## Dane aplikacji
 
@@ -87,10 +96,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.9.1
+.\build.ps1 -Version 0.9.2
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.9.1-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.9.2-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 

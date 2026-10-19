@@ -113,7 +113,8 @@ public sealed class ScheduleIncidentTests
         RunOnSta(async () =>
         {
             using var workspace = new TestWorkspace();
-            var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "00:00" };
+            var now = DateTime.Now;
+            var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = $"{now:HH:mm}, {now.AddMinutes(1):HH:mm}" };
             workspace.Repository.SaveSettings(settings);
             workspace.Repository.SaveCustomer(workspace.Customer);
             File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), "document");

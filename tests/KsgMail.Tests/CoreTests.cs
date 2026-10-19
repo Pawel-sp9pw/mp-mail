@@ -14,6 +14,8 @@ public sealed class CoreTests
         var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:30" };
         Assert.False(settings.IsDue(new DateTime(2026, 10, 12, 9, 29, 0)));
         Assert.True(settings.IsDue(new DateTime(2026, 10, 12, 9, 30, 0)));
+        Assert.True(settings.IsDue(new DateTime(2026, 10, 12, 9, 30, 59)));
+        Assert.False(settings.IsDue(new DateTime(2026, 10, 12, 9, 31, 0)));
         Assert.False(settings.IsDue(new DateTime(2026, 10, 13, 8, 59, 0)));
         Assert.True(settings.IsDue(new DateTime(2026, 10, 13, 9, 30, 0)));
         Assert.False((settings with { ScheduleEnabled = false }).IsDue(new DateTime(2026, 10, 12, 10, 0, 0)));
@@ -31,6 +33,7 @@ public sealed class CoreTests
         Assert.All(xml.Descendants(ns + "DaysInterval"), element => Assert.Equal("1", element.Value));
         Assert.Contains("PT15M", xml.Descendants(ns + "Interval").Select(element => element.Value));
         Assert.Single(xml.Descendants(ns + "LogonTrigger"));
+        Assert.Equal("false", xml.Descendants(ns + "StartWhenAvailable").Single().Value);
         Assert.Equal("--scheduled", xml.Descendants(ns + "Arguments").Single().Value);
         Assert.Equal(@"C:\Program Files\MP Mail\MpMail.exe", xml.Descendants(ns + "Command").Single().Value);
     }
@@ -327,6 +330,7 @@ public sealed class CoreTests
         var saved = workspace.Repository.Settings();
         Assert.Equal(new[] { new TimeOnly(9, 0), new TimeOnly(13, 0), new TimeOnly(16, 30) }, saved.GetScheduleTimes());
         Assert.False(saved.IsDue(new DateTime(2026, 10, 16, 8, 59, 0)));
+        Assert.False(saved.IsDue(new DateTime(2026, 10, 16, 13, 1, 0)));
         Assert.Equal(new DateTime(2026, 10, 16, 9, 0, 0), saved.DueAt(new DateTime(2026, 10, 16, 12, 59, 0)));
         Assert.Equal(new DateTime(2026, 10, 16, 13, 0, 0), saved.DueAt(new DateTime(2026, 10, 16, 13, 0, 0)));
         Assert.Equal(new DateTime(2026, 10, 16, 16, 30, 0), saved.DueAt(new DateTime(2026, 10, 16, 23, 59, 0)));
@@ -394,7 +398,7 @@ public sealed class CoreTests
     }
 
     [Fact]
-    public async Task MissedSlotsCatchUpOnlyTheMostRecentAndRespectUncertainStatus()
+    public async Task MissedSlotsAreNotCaughtUpAndUncertainDeliveryStillBlocksTheNextSlot()
     {
         using var workspace = new TestWorkspace();
         var customer = workspace.Customer;
@@ -404,11 +408,11 @@ public sealed class CoreTests
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 15, 0, 0), CancellationToken.None);
-        Assert.Equal("SCHED-2026-10-16-1300", Assert.Single(sender.Messages).Period);
+        Assert.Empty(sender.Messages);
         File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "later document");
         workspace.Repository.Finish(customer, "SCHED-2026-10-16-1600", DeliveryStatus.Uncertain, "unknown", "message-test");
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 16, 0, 0), CancellationToken.None);
-        Assert.Equal(1, sender.Count);
+        Assert.Equal(0, sender.Count);
     }
 
     [Theory]

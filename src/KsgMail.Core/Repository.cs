@@ -25,7 +25,9 @@ public sealed class Repository
                 Id INTEGER PRIMARY KEY AUTOINCREMENT, Timestamp TEXT NOT NULL,
                 CustomerName TEXT NOT NULL, Email TEXT NOT NULL, Period TEXT NOT NULL,
                 Status TEXT NOT NULL, Detail TEXT NOT NULL, MessageId TEXT NOT NULL);
-            PRAGMA user_version=1;
+            CREATE TABLE IF NOT EXISTS ScheduledBatches (
+                Period TEXT PRIMARY KEY, StartedAt TEXT NOT NULL);
+            PRAGMA user_version=2;
             """;
         command.ExecuteNonQuery();
     }
@@ -104,6 +106,16 @@ public sealed class Repository
         Validation.Settings(settings);
         Execute("INSERT INTO Settings VALUES(1,$data) ON CONFLICT(Id) DO UPDATE SET Data=$data",
             ("$data", JsonSerializer.Serialize(settings)));
+    }
+
+    public bool TryStartScheduledBatch(string period)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO ScheduledBatches VALUES($period,$time) ON CONFLICT(Period) DO NOTHING";
+        command.Parameters.AddWithValue("$period", period);
+        command.Parameters.AddWithValue("$time", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        return command.ExecuteNonQuery() == 1;
     }
 
     public bool IsBlocked(string customerId, string period)

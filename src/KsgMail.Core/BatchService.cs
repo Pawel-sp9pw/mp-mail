@@ -116,6 +116,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         }
         diagnostics?.Invoke($"Sprawdzanie automatu: {localNow:yyyy-MM-dd HH:mm:ss}; godziny {settings.ScheduleTime}.");
 
+        await RunScheduledAsync(localNow, cancellationToken, beforeSend, diagnostics);
+
         foreach (var customer in repository.Customers())
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -132,8 +134,6 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     $"Retencja archiwum nie powiodła się: {ErrorMessages.Describe(exception)}");
             }
         }
-
-        await RunScheduledAsync(localNow, cancellationToken, beforeSend, diagnostics);
 
         var interval = settings.NegativeIntervalMinutes;
         var totalMinutes = localNow.Hour * 60 + localNow.Minute;
@@ -158,14 +158,21 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         var settings = repository.Settings();
         if (!settings.IsDue(localNow))
         {
-            diagnostics?.Invoke("Wysyłka zbiorcza: przed pierwszym terminem lub harmonogram wyłączony.");
+            diagnostics?.Invoke("Wysyłka zbiorcza pominięta: poza ustawioną minutą lub harmonogram wyłączony. Zaległe terminy nie są nadrabiane.");
             return;
         }
         var period = settings.DueAt(localNow).TimeOfDay == settings.GetScheduleTimes()[0].ToTimeSpan()
             ? localNow.ToString("yyyy-MM-dd")
             : $"SCHED-{settings.DueAt(localNow):yyyy-MM-dd-HHmm}";
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!repository.TryStartScheduledBatch(period))
+        {
+            diagnostics?.Invoke($"Termin {period}: partia została już rozpoczęta. Kolejne pliki lub firmy czekają na następny termin.");
+            return;
+        }
         var customers = ScheduledCustomers(period, localNow.ToString("yyyy-MM-dd"), false, diagnostics);
         if (customers.Count == 0) return;
+        diagnostics?.Invoke($"Rozpoczęto jedną partię zbiorczą dla {customers.Count} firm w terminie {period}.");
         beforeSend?.Invoke();
         using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken);
         await SendAsync(batch, false, null, cancellationToken);

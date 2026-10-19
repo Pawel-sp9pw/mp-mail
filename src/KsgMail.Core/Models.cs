@@ -56,7 +56,8 @@ public sealed record AppSettings
         return new(localNow.Year, localNow.Month, localNow.Day, time.Hour, time.Minute, 0);
     }
 
-    public bool IsDue(DateTime localNow) => ScheduleEnabled && localNow >= DueAt(localNow);
+    public bool IsDue(DateTime localNow) => ScheduleEnabled &&
+        GetScheduleTimes().Any(time => time.Hour == localNow.Hour && time.Minute == localNow.Minute);
 }
 
 public sealed record DeliveryLog(long Id, DateTimeOffset Timestamp, string CustomerName,
