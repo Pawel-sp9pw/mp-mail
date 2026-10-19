@@ -39,6 +39,7 @@ public sealed class WindowsScheduler
                     new XElement(ns + "DisallowStartIfOnBatteries", false),
                     new XElement(ns + "StopIfGoingOnBatteries", false),
                     new XElement(ns + "StartWhenAvailable", true),
+                    new XElement(ns + "WakeToRun", true),
                     new XElement(ns + "ExecutionTimeLimit", "PT0S"),
                     new XElement(ns + "Enabled", true)),
                 new XElement(ns + "Actions", new XAttribute("Context", "Author"),

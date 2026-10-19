@@ -105,10 +105,16 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         finally { gate.Release(); }
     }
 
-    public async Task RunAutomationsAsync(DateTime localNow, CancellationToken cancellationToken)
+    public async Task RunAutomationsAsync(DateTime localNow, CancellationToken cancellationToken,
+        Action? beforeSend = null, Action<string>? diagnostics = null)
     {
         var settings = repository.Settings();
-        if (!settings.ScheduleEnabled) return;
+        if (!settings.ScheduleEnabled)
+        {
+            diagnostics?.Invoke("Automatyczna wysyłka jest wyłączona.");
+            return;
+        }
+        diagnostics?.Invoke($"Sprawdzanie automatu: {localNow:yyyy-MM-dd HH:mm:ss}; godziny {settings.ScheduleTime}.");
 
         foreach (var customer in repository.Customers())
         {
@@ -127,6 +133,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             }
         }
 
+        await RunScheduledAsync(localNow, cancellationToken, beforeSend, diagnostics);
+
         var interval = settings.NegativeIntervalMinutes;
         var totalMinutes = localNow.Hour * 60 + localNow.Minute;
         var slotMinutes = totalMinutes - totalMinutes % interval;
@@ -134,32 +142,62 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         var slotMinute = slotMinutes % 60;
         var slot = new DateTime(localNow.Year, localNow.Month, localNow.Day, slotHour, slotMinute, 0);
         var negativePeriod = $"NEG-{slot:yyyy-MM-dd-HHmm}";
-        var negativeCustomers = repository.Customers()
-            .Where(customer => customer.Active &&
-                !repository.IsBlocked(customer.Id, negativePeriod) &&
-                archives.HasMatchingFiles(customer.SourceDirectory, true)).ToList();
+        var negativeCustomers = ScheduledCustomers(negativePeriod, null, true, diagnostics);
         if (negativeCustomers.Count > 0)
         {
+            beforeSend?.Invoke();
             using var negativeBatch = await PrepareAsync(negativeCustomers, settings, negativePeriod, false, null, cancellationToken, true);
             await SendAsync(negativeBatch, false, null, cancellationToken);
         }
-
-        await RunScheduledAsync(localNow, cancellationToken);
+        diagnostics?.Invoke("Zakończono sprawdzanie automatu. Wyniki prób wysyłki są w historii.");
     }
 
-    public async Task RunScheduledAsync(DateTime localNow, CancellationToken cancellationToken)
+    public async Task RunScheduledAsync(DateTime localNow, CancellationToken cancellationToken,
+        Action? beforeSend = null, Action<string>? diagnostics = null)
     {
         var settings = repository.Settings();
-        if (!settings.IsDue(localNow)) return;
+        if (!settings.IsDue(localNow))
+        {
+            diagnostics?.Invoke("Wysyłka zbiorcza: przed pierwszym terminem lub harmonogram wyłączony.");
+            return;
+        }
         var period = settings.DueAt(localNow).TimeOfDay == settings.GetScheduleTimes()[0].ToTimeSpan()
             ? localNow.ToString("yyyy-MM-dd")
             : $"SCHED-{settings.DueAt(localNow):yyyy-MM-dd-HHmm}";
-        var customers = repository.Customers().Where(customer => customer.Active &&
-            !repository.IsBlocked(customer.Id, period) &&
-            !repository.HasUnresolvedScheduledDelivery(customer.Id, localNow.ToString("yyyy-MM-dd")) &&
-            archives.HasMatchingFiles(customer.SourceDirectory, false)).ToList();
+        var customers = ScheduledCustomers(period, localNow.ToString("yyyy-MM-dd"), false, diagnostics);
         if (customers.Count == 0) return;
+        beforeSend?.Invoke();
         using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken);
         await SendAsync(batch, false, null, cancellationToken);
+    }
+
+    private List<Customer> ScheduledCustomers(string period, string? day, bool negativeOnly, Action<string>? diagnostics)
+    {
+        var selected = new List<Customer>();
+        int inactive = 0, blocked = 0, noFiles = 0, errors = 0;
+        foreach (var customer in repository.Customers())
+        {
+            if (!customer.Active) { inactive++; continue; }
+            if (repository.IsBlocked(customer.Id, period) ||
+                day != null && repository.HasUnresolvedScheduledDelivery(customer.Id, day))
+            {
+                blocked++;
+                continue;
+            }
+            try
+            {
+                if (archives.HasMatchingFiles(customer.SourceDirectory, negativeOnly)) selected.Add(customer);
+                else noFiles++;
+            }
+            catch (Exception exception)
+            {
+                errors++;
+                var detail = ErrorMessages.ForCustomer(customer.Name, exception);
+                repository.Log(customer, period, DeliveryStatus.Failed, detail);
+                diagnostics?.Invoke(detail);
+            }
+        }
+        diagnostics?.Invoke($"Termin {period}: do wysyłki {selected.Count}; nieaktywne {inactive}; już wysłane lub wynik niepewny {blocked}; brak pasujących plików lub niedostępny katalog {noFiles}; błędy {errors}.");
+        return selected;
     }
 }

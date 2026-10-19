@@ -29,13 +29,17 @@ public partial class MainWindow : Window
     private UpdateInfo? availableUpdate;
     private bool initialUpdateCheckDone;
     private List<Customer> allCustomers = [];
+    private readonly Action<string> scheduleTrace;
+    private bool scheduleCheckRequested;
 
-    public MainWindow(Repository repository, ISecretProtector secrets, SmtpSender sender, BatchService batches)
+    public MainWindow(Repository repository, ISecretProtector secrets, SmtpSender sender, BatchService batches,
+        Action<string>? scheduleTrace = null)
     {
         this.repository = repository;
         this.secrets = secrets;
         this.sender = sender;
         this.batches = batches;
+        this.scheduleTrace = scheduleTrace ?? (_ => { });
         InitializeComponent();
         Period.Text = DateTime.Now.ToString("yyyy-MM");
         LoadSettings();
@@ -348,10 +352,16 @@ public partial class MainWindow : Window
     private async void SendPrepared(object senderObject, RoutedEventArgs args)
     {
         if (prepared == null) return;
+        var confirmedPreview = prepared;
         var count = prepared.Items.Count(mail => mail.Ready);
         var warning = preparedResend ? "\nUWAGA: zezwolono na powtórną wysyłkę; możliwe duplikaty." : "";
         if (MessageBox.Show(this, $"Wysłać {count} wiadomości z przygotowanego podglądu?{warning}",
             "Potwierdź wysyłkę", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (prepared != confirmedPreview)
+        {
+            StatusText.Text = "Podgląd został wyczyszczony przez automat. Przygotuj nowy podgląd przed ręczną wysyłką.";
+            return;
+        }
         await RunAsync(async cancellationToken =>
         {
             await batches.SendAsync(prepared, preparedResend,
@@ -472,8 +482,9 @@ public partial class MainWindow : Window
         Tabs.IsEnabled = false;
         CancelButton.IsEnabled = true;
         operation = new CancellationTokenSource();
+        Exception? failure = null;
         try { await action(operation.Token); }
-        catch (Exception exception) { ShowError(exception); }
+        catch (Exception exception) { failure = exception; }
         finally
         {
             operation.Dispose();
@@ -482,7 +493,9 @@ public partial class MainWindow : Window
             Tabs.IsEnabled = true;
             CancelButton.IsEnabled = false;
             LoadLogs();
+            RunQueuedScheduleCheck();
         }
+        if (failure != null) ShowError(failure);
     }
 
     private void Guard(Action action, string? customerName = null)
@@ -498,22 +511,53 @@ public partial class MainWindow : Window
         MessageBox.Show(this, message, "MP Mail", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private async void ScheduleTick(object? senderObject, EventArgs args)
+    public void RequestScheduleCheck()
     {
-        if (busy || prepared != null || DateTime.Now < nextScheduleCheck || !repository.Settings().ScheduleEnabled) return;
-        nextScheduleCheck = DateTime.Now.AddMinutes(1);
+        scheduleCheckRequested = true;
+        scheduleTrace(busy ? "Odebrano żądanie automatu; czeka na zakończenie bieżącej operacji." : "Odebrano żądanie automatu z zadania Windows.");
+        ScheduleTick(this, EventArgs.Empty);
+    }
+
+    private void RunQueuedScheduleCheck()
+    {
+        if (scheduleCheckRequested)
+            Dispatcher.BeginInvoke(new Action(() => ScheduleTick(this, EventArgs.Empty)));
+    }
+
+    private async void ScheduleTick(object? senderObject, EventArgs args) => await CheckScheduleAsync(DateTime.Now);
+
+    public async Task CheckScheduleAsync(DateTime localNow)
+    {
+        if (busy || !scheduleCheckRequested && localNow < nextScheduleCheck) return;
+        scheduleCheckRequested = false;
+        nextScheduleCheck = localNow.AddMinutes(1);
         busy = true;
         Tabs.IsEnabled = false;
         CancelButton.IsEnabled = true;
         operation = new CancellationTokenSource();
         try
         {
+            if (!repository.Settings().ScheduleEnabled)
+            {
+                scheduleTrace("Automatyczna wysyłka jest wyłączona.");
+                return;
+            }
+            var previewCleared = false;
             StatusText.Text = "Sprawdzanie wysyłki zbiorczej i interwału NEG…";
-            await batches.RunAutomationsAsync(DateTime.Now, operation.Token);
-            StatusText.Text = "Sprawdzono harmonogramy. Wyniki są w historii.";
+            await batches.RunAutomationsAsync(localNow, operation.Token, () =>
+            {
+                if (prepared == null) return;
+                InvalidatePreview();
+                previewCleared = true;
+                scheduleTrace("Wyczyszczono podgląd przed automatyczną wysyłką, aby nie blokował harmonogramu i nie umożliwiał wysłania nieaktualnego ZIP.");
+            }, scheduleTrace);
+            StatusText.Text = previewCleared
+                ? "Automat wyczyścił nieaktualny podgląd i wykonał harmonogram. Wyniki są w historii."
+                : "Sprawdzono harmonogramy. Wyniki są w historii.";
         }
         catch (Exception exception)
         {
+            scheduleTrace($"Błąd automatu: {ErrorMessages.Describe(exception)}");
             repository.Log(new Customer { Name = "Harmonogram" }, DateTime.Now.ToString("yyyy-MM-dd"),
                 DeliveryStatus.Failed, ErrorMessages.Describe(exception));
             StatusText.Text = ErrorMessages.Describe(exception);
@@ -526,6 +570,7 @@ public partial class MainWindow : Window
             Tabs.IsEnabled = true;
             CancelButton.IsEnabled = false;
             LoadLogs();
+            RunQueuedScheduleCheck();
         }
     }
 
