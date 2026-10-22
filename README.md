@@ -68,7 +68,7 @@ Rejestr rozpoczęcia partii jest zapisywany atomowo w bazie, również gdy nie b
 
 Po sprawdzeniu wysyłki zbiorczej aplikacja wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Trwająca lub niepewna wcześniejsza wysyłka zbiorcza blokuje pozostałe terminy tego samego dnia, aby nie powielać dokumentów. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<okres>/`: pierwszy termin zachowuje okres `RRRR-MM-DD`, kolejne używają `SCHED-RRRR-MM-DD-HHmm`. Dzięki temu wcześniejsze zapisy pojedynczej wysyłki nadal chronią pierwszy termin przed powtórzeniem. Program nie przeszukuje żadnych podkatalogów firmy. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
 
-Wersja 0.10.1 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
+Wersja 0.10.2 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -106,10 +106,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.10.1
+.\build.ps1 -Version 0.10.2
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.10.1-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.10.2-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
@@ -131,3 +131,10 @@ Uruchomienie jest wykonywane przez sekcję `[Run]` instalatora dopiero po udanej
 Test `tests/Test-InstallerRestart.ps1` buduje instalator z niewysyłającą maili aplikacją testową i sprawdza oba tryby cichej instalacji: jedno uruchomienie z docelowego katalogu po sukcesie oraz brak uruchomienia po błędzie zapisu dodatkowego pliku, gdy w katalogu znajduje się już działająca poprzednia instalacja. Test używa osobnego identyfikatora instalatora i katalogów pod `artifacts/installer-tests`, bez skrótów i wpisu deinstalacji. Jest wykonywany przed publikacją wydania w GitHub Actions oraz podczas `build.ps1`.
 
 Nie jest używany żaden zewnętrzny serwer aktualizacji poza GitHub Releases projektu.
+
+
+### Znaczniki daty
+
+- `{data}` oznacza rzeczywistą lokalną datę przygotowania/wysyłki wiadomości, np. `2026-10-22`.
+- `{miesiac}` nadal oznacza miesiąc wybranego okresu, np. `2026-10`.
+
