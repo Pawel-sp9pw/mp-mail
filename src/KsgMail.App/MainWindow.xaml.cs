@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private List<Customer> allCustomers = [];
     private readonly Action<string> scheduleTrace;
     private bool scheduleCheckRequested;
+    private readonly ObservableCollection<FileDispatchRule> fileRules = [];
 
     public MainWindow(Repository repository, ISecretProtector secrets, SmtpSender sender, BatchService batches,
         Action<string>? scheduleTrace = null)
@@ -266,8 +268,11 @@ public partial class MainWindow : Window
         RetryCount.Text = settings.RetryCount.ToString(CultureInfo.InvariantCulture);
         ScheduleEnabled.IsChecked = settings.ScheduleEnabled;
         ScheduleTime.Text = settings.ScheduleTime;
-        NegativeIntervalMinutes.Text = settings.NegativeIntervalMinutes.ToString(CultureInfo.InvariantCulture);
         ArchiveRetentionDays.Text = settings.ArchiveRetentionDays.ToString(CultureInfo.InvariantCulture);
+        fileRules.Clear();
+        foreach (var rule in settings.FileRules ?? [])
+            fileRules.Add(rule.Clone());
+        FileRulesGrid.ItemsSource = fileRules;
     }
 
     private static int Number(TextBox field, string name)
@@ -289,14 +294,56 @@ public partial class MainWindow : Window
             MaxAttachmentMb = Number(AttachmentLimit, "Limit ZIP"), MaxSourceMb = Number(SourceLimit, "Limit plików"),
             RetryCount = Number(RetryCount, "Liczba prób"), ScheduleEnabled = ScheduleEnabled.IsChecked == true,
             ScheduleTime = ScheduleTime.Text.Trim(),
-            NegativeIntervalMinutes = Number(NegativeIntervalMinutes, "Interwał NEG"),
-            ArchiveRetentionDays = Number(ArchiveRetentionDays, "Retencja archiwum")
+            ArchiveRetentionDays = Number(ArchiveRetentionDays, "Retencja archiwum"),
+            FileRules = fileRules.Select(rule => rule.Clone()).ToList()
         };
         Validation.Settings(result);
         return result with
         {
             ScheduleTime = string.Join(", ", result.GetScheduleTimes().Select(time => time.ToString("HH:mm", CultureInfo.InvariantCulture)))
         };
+    }
+
+    private void AddFileRule(object senderObject, RoutedEventArgs args)
+    {
+        var rule = new FileDispatchRule
+        {
+            Pattern = "*.pdf",
+            Enabled = true,
+            Mode = FileDispatchMode.Scheduled,
+            IntervalMinutes = 15
+        };
+        fileRules.Add(rule);
+        FileRulesGrid.SelectedItem = rule;
+        FileRulesGrid.ScrollIntoView(rule);
+    }
+
+    private void RemoveFileRule(object senderObject, RoutedEventArgs args)
+    {
+        if (FileRulesGrid.SelectedItem is not FileDispatchRule rule)
+        {
+            ShowError(new UserException("Wybierz regułę do usunięcia."));
+            return;
+        }
+        fileRules.Remove(rule);
+    }
+
+    private void MoveFileRuleUp(object senderObject, RoutedEventArgs args)
+    {
+        if (FileRulesGrid.SelectedItem is not FileDispatchRule rule) return;
+        var index = fileRules.IndexOf(rule);
+        if (index <= 0) return;
+        fileRules.Move(index, index - 1);
+        FileRulesGrid.SelectedItem = rule;
+    }
+
+    private void MoveFileRuleDown(object senderObject, RoutedEventArgs args)
+    {
+        if (FileRulesGrid.SelectedItem is not FileDispatchRule rule) return;
+        var index = fileRules.IndexOf(rule);
+        if (index < 0 || index >= fileRules.Count - 1) return;
+        fileRules.Move(index, index + 1);
+        FileRulesGrid.SelectedItem = rule;
     }
 
     private async void SaveSettings(object senderObject, RoutedEventArgs args) => await RunAsync(async cancellationToken =>
@@ -543,7 +590,7 @@ public partial class MainWindow : Window
                 return;
             }
             var previewCleared = false;
-            StatusText.Text = "Sprawdzanie wysyłki zbiorczej i interwału NEG…";
+            StatusText.Text = "Sprawdzanie reguł wysyłki wg godzin i interwałów…";
             await batches.RunAutomationsAsync(localNow, operation.Token, () =>
             {
                 if (prepared == null) return;
