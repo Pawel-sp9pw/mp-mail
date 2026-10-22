@@ -295,7 +295,7 @@ public partial class MainWindow : Window
             RetryCount = Number(RetryCount, "Liczba prób"), ScheduleEnabled = ScheduleEnabled.IsChecked == true,
             ScheduleTime = ScheduleTime.Text.Trim(),
             ArchiveRetentionDays = Number(ArchiveRetentionDays, "Retencja archiwum"),
-            FileRules = fileRules.Select(rule => rule.Clone()).ToList()
+            FileRules = new FileDispatchRuleSet(fileRules.Select(rule => rule.Clone()))
         };
         Validation.Settings(result);
         return result with
