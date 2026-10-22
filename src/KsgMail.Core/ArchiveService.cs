@@ -30,6 +30,27 @@ public sealed class ArchiveService(ISecretProtector secrets)
     public const string SendFilePrefix = "orzeczenie-profilaktyczne-p1";
     public const string NegativeFilePrefix = "NEG.orzeczenie-profilaktyczne-p1";
 
+    private static IReadOnlyList<FileDispatchRule> LegacyRules(int negativeInterval = 15) =>
+    [
+        new() { Pattern = SendFilePrefix + "*.pdf", Enabled = true, Mode = FileDispatchMode.Scheduled },
+        new() { Pattern = NegativeFilePrefix + "*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = negativeInterval }
+    ];
+
+    public bool HasMatchingFiles(string directory, bool negativeOnly = false)
+    {
+        var rules = LegacyRules();
+        return HasMatchingFiles(directory, rules, rule =>
+            negativeOnly ? rule.Mode == FileDispatchMode.Interval : rule.Mode == FileDispatchMode.Scheduled);
+    }
+
+    public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes, bool negativeOnly = false)
+    {
+        var rules = LegacyRules();
+        return Discover(directory, maxSourceBytes, rules,
+            rule => negativeOnly ? rule.Mode == FileDispatchMode.Interval : rule.Mode == FileDispatchMode.Scheduled,
+            negativeOnly ? "NEG" : "zbiorcza");
+    }
+
     public bool HasMatchingFiles(string directory, IReadOnlyList<FileDispatchRule> rules,
         Func<FileDispatchRule, bool> includeRule)
     {
