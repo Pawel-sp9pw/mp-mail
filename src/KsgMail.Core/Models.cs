@@ -42,8 +42,6 @@ public sealed class FileDispatchRuleSet : List<FileDispatchRule>, IEquatable<Fil
     public FileDispatchRuleSet() { }
     public FileDispatchRuleSet(IEnumerable<FileDispatchRule> rules) : base(rules) { }
 
-    public static implicit operator FileDispatchRuleSet(List<FileDispatchRule> rules) => new(rules);
-
     public bool Equals(FileDispatchRuleSet? other)
     {
         if (other == null || Count != other.Count) return false;
