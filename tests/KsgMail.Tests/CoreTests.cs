@@ -511,7 +511,7 @@ public sealed class CoreTests
     public async Task DifferentRuleIntervalsCreateSeparateBatches()
     {
         using var workspace = new TestWorkspace();
-        var rules = new List<FileDispatchRule>
+        var rules = new FileDispatchRuleSet
         {
             new() { Pattern = "FAST-*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 5 },
             new() { Pattern = "SLOW-*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 15 }
