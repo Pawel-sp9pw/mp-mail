@@ -152,7 +152,15 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             var slotHour = slotMinutes / 60;
             var slotMinute = slotMinutes % 60;
             var slot = new DateTime(localNow.Year, localNow.Month, localNow.Day, slotHour, slotMinute, 0);
-            var period = $"INT-{interval}-{slot:yyyy-MM-dd-HHmm}";
+            var intervalRules = settings.FileRules
+                .Where(rule => rule.Enabled && rule.Mode == FileDispatchMode.Interval && rule.IntervalMinutes == interval)
+                .ToList();
+            var legacyNegativeGroup = intervalRules.Count == 1 &&
+                interval == settings.NegativeIntervalMinutes &&
+                intervalRules[0].Pattern.Equals("NEG.orzeczenie-profilaktyczne-p1*.pdf", StringComparison.OrdinalIgnoreCase);
+            var period = legacyNegativeGroup
+                ? $"NEG-{slot:yyyy-MM-dd-HHmm}"
+                : $"INT-{interval}-{slot:yyyy-MM-dd-HHmm}";
             var group = $"interval:{interval}";
             var customers = ScheduledCustomers(period, null, group, diagnostics);
             if (customers.Count == 0) continue;
