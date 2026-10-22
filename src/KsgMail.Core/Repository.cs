@@ -98,7 +98,12 @@ public sealed class Repository
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT Data FROM Settings WHERE Id=1";
-        return command.ExecuteScalar() is string data ? JsonSerializer.Deserialize<AppSettings>(data)! : new AppSettings();
+        if (command.ExecuteScalar() is not string data) return new AppSettings();
+        var settings = JsonSerializer.Deserialize<AppSettings>(data)!;
+        using var document = JsonDocument.Parse(data);
+        if (!document.RootElement.TryGetProperty(nameof(AppSettings.FileRules), out _))
+            settings = settings with { FileRules = AppSettings.DefaultFileRules(settings.NegativeIntervalMinutes) };
+        return settings;
     }
 
     public void SaveSettings(AppSettings settings)
