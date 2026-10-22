@@ -46,9 +46,17 @@ public sealed class ArchiveService(ISecretProtector secrets)
     public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes, bool negativeOnly = false)
     {
         var rules = LegacyRules();
-        return Discover(directory, maxSourceBytes, rules,
-            rule => negativeOnly ? rule.Mode == FileDispatchMode.Interval : rule.Mode == FileDispatchMode.Scheduled,
-            negativeOnly ? "NEG" : "zbiorcza");
+        try
+        {
+            return Discover(directory, maxSourceBytes, rules,
+                rule => negativeOnly ? rule.Mode == FileDispatchMode.Interval : rule.Mode == FileDispatchMode.Scheduled,
+                negativeOnly ? "NEG" : "zbiorcza");
+        }
+        catch (UserException exception) when (exception.Message.StartsWith("Brak plików pasujących", StringComparison.Ordinal))
+        {
+            var pattern = negativeOnly ? "NEG.orzeczenie-profilaktyczne-p1*.pdf" : "orzeczenie-profilaktyczne-p1*.pdf";
+            throw new UserException($"Brak plików pasujących do wzorca {pattern} bezpośrednio w katalogu firmy. Wiadomość nie zostanie wysłana.");
+        }
     }
 
     public bool HasMatchingFiles(string directory, IReadOnlyList<FileDispatchRule> rules,
