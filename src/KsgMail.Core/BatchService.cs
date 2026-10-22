@@ -5,11 +5,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
     private readonly SemaphoreSlim gate = new(1, 1);
 
     public async Task<PreparedBatch> PrepareAsync(IEnumerable<Customer> customers, AppSettings settings, string period,
-        bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken, bool negativeOnly = false)
+        bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken, bool negativeOnly = false,
+        string? dispatchGroup = null)
     {
         Validation.Settings(settings);
-        var templatePeriod = period.StartsWith("NEG-", StringComparison.Ordinal) ? period.Substring(4, 10) :
-            period.StartsWith("SCHED-", StringComparison.Ordinal) ? period.Substring(6, 10) : period;
+        var templatePeriod = TemplatePeriod(period);
+        var group = dispatchGroup ?? (negativeOnly ? "interval:15" : "scheduled");
         var validMonth = DateOnly.TryParseExact(templatePeriod + "-01", "yyyy-MM-dd", out _);
         var validDay = DateOnly.TryParseExact(templatePeriod, "yyyy-MM-dd", out _);
         if (!validMonth && !validDay) throw new UserException("Niepoprawny okres wysyłki.");
@@ -38,7 +39,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     if (tempPath.StartsWith(sourcePath, StringComparison.OrdinalIgnoreCase) ||
                         sourcePath.StartsWith(tempPath, StringComparison.OrdinalIgnoreCase))
                         throw new UserException("Katalog dokumentów nie może obejmować katalogu roboczego MP Mail.");
-                    var files = await Task.Run(() => archives.Discover(customer.SourceDirectory, settings.MaxSourceMb * 1048576L, negativeOnly), cancellationToken);
+                    var files = await Task.Run(() => archives.Discover(customer.SourceDirectory,
+                        settings.MaxSourceMb * 1048576L, settings.FileRules,
+                        rule => RuleMatchesGroup(rule, group), GroupDescription(group)), cancellationToken);
                     await Task.Run(() => archives.Create(path, files, customer, settings.MaxAttachmentMb * 1048576L, cancellationToken), cancellationToken);
                     batch.Items.Add(new(customer, period, subject, body, path, files, new FileInfo(path).Length, null, false));
                 }
@@ -135,19 +138,30 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             }
         }
 
-        var interval = settings.NegativeIntervalMinutes;
-        var totalMinutes = localNow.Hour * 60 + localNow.Minute;
-        var slotMinutes = totalMinutes - totalMinutes % interval;
-        var slotHour = slotMinutes / 60;
-        var slotMinute = slotMinutes % 60;
-        var slot = new DateTime(localNow.Year, localNow.Month, localNow.Day, slotHour, slotMinute, 0);
-        var negativePeriod = $"NEG-{slot:yyyy-MM-dd-HHmm}";
-        var negativeCustomers = ScheduledCustomers(negativePeriod, null, true, diagnostics);
-        if (negativeCustomers.Count > 0)
+        var intervals = settings.FileRules
+            .Where(rule => rule.Enabled && rule.Mode == FileDispatchMode.Interval)
+            .Select(rule => rule.IntervalMinutes)
+            .Distinct()
+            .Order()
+            .ToList();
+
+        foreach (var interval in intervals)
         {
+            var totalMinutes = localNow.Hour * 60 + localNow.Minute;
+            var slotMinutes = totalMinutes - totalMinutes % interval;
+            var slotHour = slotMinutes / 60;
+            var slotMinute = slotMinutes % 60;
+            var slot = new DateTime(localNow.Year, localNow.Month, localNow.Day, slotHour, slotMinute, 0);
+            var period = $"INT-{interval}-{slot:yyyy-MM-dd-HHmm}";
+            var group = $"interval:{interval}";
+            var customers = ScheduledCustomers(period, null, group, diagnostics);
+            if (customers.Count == 0) continue;
+
+            diagnostics?.Invoke($"Interwał {interval} min: rozpoczęto partię dla {customers.Count} firm.");
             beforeSend?.Invoke();
-            using var negativeBatch = await PrepareAsync(negativeCustomers, settings, negativePeriod, false, null, cancellationToken, true);
-            await SendAsync(negativeBatch, false, null, cancellationToken);
+            using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken,
+                dispatchGroup: group);
+            await SendAsync(batch, false, null, cancellationToken);
         }
         diagnostics?.Invoke("Zakończono sprawdzanie automatu. Wyniki prób wysyłki są w historii.");
     }
@@ -170,7 +184,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             diagnostics?.Invoke($"Termin {period}: partia została już rozpoczęta. Kolejne pliki lub firmy czekają na następny termin.");
             return;
         }
-        var customers = ScheduledCustomers(period, localNow.ToString("yyyy-MM-dd"), false, diagnostics);
+        var customers = ScheduledCustomers(period, localNow.ToString("yyyy-MM-dd"), "scheduled", diagnostics);
         if (customers.Count == 0) return;
         diagnostics?.Invoke($"Rozpoczęto jedną partię zbiorczą dla {customers.Count} firm w terminie {period}.");
         beforeSend?.Invoke();
@@ -178,7 +192,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         await SendAsync(batch, false, null, cancellationToken);
     }
 
-    private List<Customer> ScheduledCustomers(string period, string? day, bool negativeOnly, Action<string>? diagnostics)
+    private List<Customer> ScheduledCustomers(string period, string? day, string dispatchGroup, Action<string>? diagnostics)
     {
         var selected = new List<Customer>();
         int inactive = 0, blocked = 0, noFiles = 0, errors = 0;
@@ -193,7 +207,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             }
             try
             {
-                if (archives.HasMatchingFiles(customer.SourceDirectory, negativeOnly)) selected.Add(customer);
+                if (archives.HasMatchingFiles(customer.SourceDirectory, repository.Settings().FileRules,
+                        rule => RuleMatchesGroup(rule, dispatchGroup))) selected.Add(customer);
                 else noFiles++;
             }
             catch (Exception exception)
@@ -207,4 +222,29 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         diagnostics?.Invoke($"Termin {period}: do wysyłki {selected.Count}; nieaktywne {inactive}; już wysłane lub wynik niepewny {blocked}; brak pasujących plików lub niedostępny katalog {noFiles}; błędy {errors}.");
         return selected;
     }
+    private static bool RuleMatchesGroup(FileDispatchRule rule, string group) =>
+        group == "scheduled"
+            ? rule.Mode == FileDispatchMode.Scheduled
+            : group.StartsWith("interval:", StringComparison.Ordinal) &&
+              rule.Mode == FileDispatchMode.Interval &&
+              int.TryParse(group.AsSpan("interval:".Length), out var minutes) &&
+              rule.IntervalMinutes == minutes;
+
+    private static string GroupDescription(string group) =>
+        group == "scheduled" ? "wysyłka wg godzin" :
+        group.StartsWith("interval:", StringComparison.Ordinal) ? $"interwał {group["interval:".Length..]} min" : group;
+
+    private static string TemplatePeriod(string period)
+    {
+        if (period.Length == 7 && DateOnly.TryParseExact(period + "-01", "yyyy-MM-dd", out _))
+            return period;
+        for (var index = 0; index + 10 <= period.Length; index++)
+        {
+            var candidate = period.Substring(index, 10);
+            if (DateOnly.TryParseExact(candidate, "yyyy-MM-dd", out _))
+                return candidate;
+        }
+        return period;
+    }
+
 }
