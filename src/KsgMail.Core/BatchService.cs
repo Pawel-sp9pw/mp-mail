@@ -6,7 +6,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
 
     public async Task<PreparedBatch> PrepareAsync(IEnumerable<Customer> customers, AppSettings settings, string period,
         bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken, bool negativeOnly = false,
-        string? dispatchGroup = null)
+        string? dispatchGroup = null, DateOnly? sendDate = null)
     {
         Validation.Settings(settings);
         var templatePeriod = TemplatePeriod(period);
@@ -23,8 +23,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Report($"Przygotowanie: {customer.Name}");
-                var subject = Templates.Render(customer.Subject, customer, templatePeriod);
-                var body = Templates.Render(customer.Body, customer, templatePeriod);
+                var effectiveSendDate = sendDate ?? DateOnly.FromDateTime(DateTime.Now);
+                var subject = Templates.Render(customer.Subject, customer, templatePeriod, effectiveSendDate);
+                var body = Templates.Render(customer.Body, customer, templatePeriod, effectiveSendDate);
                 var path = Path.Combine(directory, customer.Id + ".zip");
                 if (!allowResend && repository.IsBlocked(customer.Id, period))
                 {
@@ -168,7 +169,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             diagnostics?.Invoke($"Interwał {interval} min: rozpoczęto partię dla {customers.Count} firm.");
             beforeSend?.Invoke();
             using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken,
-                dispatchGroup: group);
+                dispatchGroup: group, sendDate: DateOnly.FromDateTime(localNow));
             await SendAsync(batch, false, null, cancellationToken);
         }
         diagnostics?.Invoke("Zakończono sprawdzanie automatu. Wyniki prób wysyłki są w historii.");
@@ -196,7 +197,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         if (customers.Count == 0) return;
         diagnostics?.Invoke($"Rozpoczęto jedną partię zbiorczą dla {customers.Count} firm w terminie {period}.");
         beforeSend?.Invoke();
-        using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken);
+        using var batch = await PrepareAsync(customers, settings, period, false, null, cancellationToken,
+            sendDate: DateOnly.FromDateTime(localNow));
         await SendAsync(batch, false, null, cancellationToken);
     }
 
