@@ -1,4 +1,5 @@
 using ICSharpCode.SharpZipLib.Zip;
+using System.IO.Enumeration;
 
 namespace KsgMail.Core;
 
@@ -29,20 +30,19 @@ public sealed class ArchiveService(ISecretProtector secrets)
     public const string SendFilePrefix = "orzeczenie-profilaktyczne-p1";
     public const string NegativeFilePrefix = "NEG.orzeczenie-profilaktyczne-p1";
 
-    public bool HasMatchingFiles(string directory, bool negativeOnly = false)
+    public bool HasMatchingFiles(string directory, IReadOnlyList<FileDispatchRule> rules,
+        Func<FileDispatchRule, bool> includeRule)
     {
         if (!Directory.Exists(directory)) return false;
         return Directory.EnumerateFiles(directory).Any(path =>
         {
-            var fileName = Path.GetFileName(path);
-            var isPdf = Path.GetExtension(fileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
-            var isNegative = fileName.StartsWith(NegativeFilePrefix, StringComparison.OrdinalIgnoreCase);
-            var isStandard = fileName.StartsWith(SendFilePrefix, StringComparison.OrdinalIgnoreCase);
-            return isPdf && (negativeOnly ? isNegative : isStandard && !isNegative);
+            var rule = MatchingRule(Path.GetFileName(path), rules);
+            return rule != null && includeRule(rule);
         });
     }
 
-    public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes, bool negativeOnly = false)
+    public IReadOnlyList<SourceFile> Discover(string directory, long maxSourceBytes,
+        IReadOnlyList<FileDispatchRule> rules, Func<FileDispatchRule, bool> includeRule, string groupDescription)
     {
         if (!Directory.Exists(directory)) throw new UserException("Katalog źródłowy nie istnieje lub jest niedostępny.");
         var root = Path.GetFullPath(directory);
@@ -52,10 +52,8 @@ public sealed class ArchiveService(ISecretProtector secrets)
         foreach (var path in Directory.EnumerateFiles(root))
         {
             var fileName = Path.GetFileName(path);
-            var isPdf = Path.GetExtension(fileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
-            var isNegative = fileName.StartsWith(NegativeFilePrefix, StringComparison.OrdinalIgnoreCase);
-            var isStandard = fileName.StartsWith(SendFilePrefix, StringComparison.OrdinalIgnoreCase);
-            if (!isPdf || (negativeOnly ? !isNegative : (!isStandard || isNegative))) continue;
+            var rule = MatchingRule(fileName, rules);
+            if (rule == null || !includeRule(rule)) continue;
             RejectLink(path);
             var info = new FileInfo(path);
             total = checked(total + info.Length);
@@ -64,11 +62,19 @@ public sealed class ArchiveService(ISecretProtector secrets)
             if (files.Count > 10000) throw new UserException("Katalog zawiera ponad 10 000 plików.");
         }
         if (files.Count == 0)
-        {
-            var pattern = negativeOnly ? "NEG.orzeczenie-profilaktyczne-p1*.pdf" : "orzeczenie-profilaktyczne-p1*.pdf";
-            throw new UserException($"Brak plików pasujących do wzorca {pattern} bezpośrednio w katalogu firmy. Wiadomość nie zostanie wysłana.");
-        }
+            throw new UserException($"Brak plików pasujących do aktywnych reguł grupy „{groupDescription}” bezpośrednio w katalogu firmy. Wiadomość nie zostanie wysłana.");
         return files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToList();
+    }
+
+    private static FileDispatchRule? MatchingRule(string fileName, IReadOnlyList<FileDispatchRule> rules)
+    {
+        foreach (var rule in rules)
+        {
+            if (!rule.Enabled) continue;
+            if (FileSystemName.MatchesSimpleExpression(rule.Pattern, fileName, true))
+                return rule;
+        }
+        return null;
     }
 
     public void ArchiveSent(string sourceDirectory, IReadOnlyList<SourceFile> files, string period)
