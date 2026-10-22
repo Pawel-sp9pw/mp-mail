@@ -205,10 +205,10 @@ public sealed class UserException(string message, Exception? innerException = nu
 
 public static class Templates
 {
-    public static string Render(string text, Customer customer, string period)
+    public static string Render(string text, Customer customer, string period, DateOnly? sendDate = null)
     {
         var month = period.Length >= 7 ? period[..7] : period;
-        var date = period.Length == 10 ? period : period + "-01";
+        var date = (sendDate ?? DateOnly.FromDateTime(DateTime.Now)).ToString("yyyy-MM-dd");
         return text.Replace("{klient}", customer.Name, StringComparison.Ordinal)
             .Replace("{miesiac}", month, StringComparison.Ordinal)
             .Replace("{data}", date, StringComparison.Ordinal);
