@@ -17,6 +17,25 @@ public sealed record Customer
 
 public enum TransportSecurity { StartTls, SslOnConnect }
 public enum DeliveryStatus { Pending, Success, Failed, Uncertain, Skipped }
+public enum FileDispatchMode { Scheduled, Interval }
+
+public sealed class FileDispatchRule
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Pattern { get; set; } = "*.pdf";
+    public bool Enabled { get; set; } = true;
+    public FileDispatchMode Mode { get; set; } = FileDispatchMode.Scheduled;
+    public int IntervalMinutes { get; set; } = 15;
+
+    public FileDispatchRule Clone() => new()
+    {
+        Id = Id,
+        Pattern = Pattern,
+        Enabled = Enabled,
+        Mode = Mode,
+        IntervalMinutes = IntervalMinutes
+    };
+}
 
 public sealed record AppSettings
 {
@@ -34,6 +53,23 @@ public sealed record AppSettings
     public string ScheduleTime { get; init; } = "09:00";
     public int NegativeIntervalMinutes { get; init; } = 15;
     public int ArchiveRetentionDays { get; init; } = 90;
+    public IReadOnlyList<FileDispatchRule> FileRules { get; init; } =
+    [
+        new()
+        {
+            Pattern = "orzeczenie-profilaktyczne-p1*.pdf",
+            Enabled = true,
+            Mode = FileDispatchMode.Scheduled,
+            IntervalMinutes = 15
+        },
+        new()
+        {
+            Pattern = "NEG.orzeczenie-profilaktyczne-p1*.pdf",
+            Enabled = true,
+            Mode = FileDispatchMode.Interval,
+            IntervalMinutes = 15
+        }
+    ];
 
     public IReadOnlyList<TimeOnly> GetScheduleTimes()
     {
@@ -96,6 +132,19 @@ public static class Validation
         settings.GetScheduleTimes();
         Require(settings.NegativeIntervalMinutes is >= 1 and <= 1440, "Interwał NEG: 1–1440 minut.");
         Require(settings.ArchiveRetentionDays is >= 1 and <= 3650, "Retencja archiwum: 1–3650 dni.");
+        var rules = settings.FileRules ?? [];
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rule in rules)
+        {
+            Require(!string.IsNullOrWhiteSpace(rule.Id) && ids.Add(rule.Id), "Reguły plików muszą mieć unikalne identyfikatory.");
+            Require(!string.IsNullOrWhiteSpace(rule.Pattern), "Reguła plików: podaj nazwę lub wzorzec pliku.");
+            Require(!rule.Pattern.Contains('/') && !rule.Pattern.Contains('\\'),
+                $"Reguła „{rule.Pattern}”: podaj samą nazwę/wzorzec pliku bez ścieżki.");
+            Require(Enum.IsDefined(rule.Mode), $"Reguła „{rule.Pattern}”: nieprawidłowy tryb wysyłki.");
+            if (rule.Mode == FileDispatchMode.Interval)
+                Require(rule.IntervalMinutes is >= 1 and <= 1440,
+                    $"Reguła „{rule.Pattern}”: interwał musi mieć 1–1440 minut.");
+        }
     }
 
     public static void Email(string value, string label)
