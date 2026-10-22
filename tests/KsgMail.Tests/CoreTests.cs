@@ -479,6 +479,107 @@ public sealed class CoreTests
         Assert.Empty(workspace.Repository.Customers());
     }
 
+    [Fact]
+    public void ConfigurableFileRulesRespectOrderDisabledStateAndWildcards()
+    {
+        using var workspace = new TestWorkspace();
+        File.WriteAllText(Path.Combine(workspace.Source, "SPECIAL-001.pdf"), "special");
+        File.WriteAllText(Path.Combine(workspace.Source, "OTHER-001.pdf"), "other");
+        File.WriteAllText(Path.Combine(workspace.Source, "NOTE-001.txt"), "note");
+        var rules = new List<FileDispatchRule>
+        {
+            new() { Pattern = "SPECIAL-*.pdf", Enabled = false, Mode = FileDispatchMode.Interval, IntervalMinutes = 5 },
+            new() { Pattern = "*.pdf", Enabled = true, Mode = FileDispatchMode.Scheduled },
+            new() { Pattern = "SPECIAL-*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 5 },
+            new() { Pattern = "NOTE-???.txt", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 30 }
+        };
+        var archive = new ArchiveService(workspace.Secrets);
+
+        var scheduled = archive.Discover(workspace.Source, 10 * 1048576L, rules,
+            rule => rule.Mode == FileDispatchMode.Scheduled, "scheduled");
+        var interval30 = archive.Discover(workspace.Source, 10 * 1048576L, rules,
+            rule => rule.Mode == FileDispatchMode.Interval && rule.IntervalMinutes == 30, "30 min");
+
+        Assert.Equal(new[] { "OTHER-001.pdf", "SPECIAL-001.pdf" },
+            scheduled.Select(file => file.RelativePath).Order().ToArray());
+        Assert.Equal("NOTE-001.txt", Assert.Single(interval30).RelativePath);
+        Assert.False(archive.HasMatchingFiles(workspace.Source, rules,
+            rule => rule.Mode == FileDispatchMode.Interval && rule.IntervalMinutes == 5));
+    }
+
+    [Fact]
+    public async Task DifferentRuleIntervalsCreateSeparateBatches()
+    {
+        using var workspace = new TestWorkspace();
+        var rules = new List<FileDispatchRule>
+        {
+            new() { Pattern = "FAST-*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 5 },
+            new() { Pattern = "SLOW-*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 15 }
+        };
+        workspace.Repository.SaveCustomer(workspace.Customer);
+        workspace.Repository.SaveSettings(workspace.Settings with
+        {
+            ScheduleEnabled = true,
+            FileRules = rules
+        });
+        File.WriteAllText(Path.Combine(workspace.Source, "FAST-001.pdf"), "fast");
+        File.WriteAllText(Path.Combine(workspace.Source, "SLOW-001.pdf"), "slow");
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 22, 9, 7, 0), CancellationToken.None);
+
+        Assert.Equal(2, sender.Count);
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "INT-5-2026-10-22-0905", "FAST-001.pdf")));
+        Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "INT-15-2026-10-22-0900", "SLOW-001.pdf")));
+
+        File.WriteAllText(Path.Combine(workspace.Source, "FAST-002.pdf"), "fast2");
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 22, 9, 9, 0), CancellationToken.None);
+        Assert.Equal(2, sender.Count);
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 22, 9, 10, 0), CancellationToken.None);
+        Assert.Equal(3, sender.Count);
+    }
+
+    [Fact]
+    public void WindowsTaskUsesDistinctIntervalsFromEnabledRules()
+    {
+        var settings = new AppSettings
+        {
+            ScheduleEnabled = true,
+            ScheduleTime = "09:00, 13:00",
+            FileRules =
+            [
+                new() { Pattern = "A*.pdf", Enabled = true, Mode = FileDispatchMode.Scheduled },
+                new() { Pattern = "B*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 5 },
+                new() { Pattern = "C*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 15 },
+                new() { Pattern = "D*.pdf", Enabled = true, Mode = FileDispatchMode.Interval, IntervalMinutes = 15 },
+                new() { Pattern = "E*.pdf", Enabled = false, Mode = FileDispatchMode.Interval, IntervalMinutes = 30 }
+            ]
+        };
+
+        var document = WindowsScheduler.BuildTaskXml(settings, @"C:\MP Mail\MpMail.exe", "S-1-test");
+        XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+
+        Assert.Equal(new[] { "PT5M", "PT15M" },
+            document.Descendants(ns + "Interval").Select(element => element.Value).ToArray());
+        Assert.Equal(2, document.Descendants(ns + "CalendarTrigger")
+            .Count(trigger => trigger.Element(ns + "Repetition") == null));
+    }
+
+    [Fact]
+    public void LegacySettingsReceiveCurrentDefaultFileRules()
+    {
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+            """{"ScheduleEnabled":true,"ScheduleTime":"09:00","NegativeIntervalMinutes":15}""")!;
+
+        Assert.Equal(2, legacy.FileRules.Count);
+        Assert.Equal("orzeczenie-profilaktyczne-p1*.pdf", legacy.FileRules[0].Pattern);
+        Assert.Equal(FileDispatchMode.Scheduled, legacy.FileRules[0].Mode);
+        Assert.Equal("NEG.orzeczenie-profilaktyczne-p1*.pdf", legacy.FileRules[1].Pattern);
+        Assert.Equal(FileDispatchMode.Interval, legacy.FileRules[1].Mode);
+        Assert.Equal(15, legacy.FileRules[1].IntervalMinutes);
+    }
+
     private sealed class RecordingSender : IMailSender
     {
         public int Count { get; private set; }
