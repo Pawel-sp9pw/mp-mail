@@ -37,6 +37,45 @@ public sealed class FileDispatchRule
     };
 }
 
+public sealed class FileDispatchRuleSet : List<FileDispatchRule>, IEquatable<FileDispatchRuleSet>
+{
+    public FileDispatchRuleSet() { }
+    public FileDispatchRuleSet(IEnumerable<FileDispatchRule> rules) : base(rules) { }
+
+    public bool Equals(FileDispatchRuleSet? other)
+    {
+        if (other == null || Count != other.Count) return false;
+        for (var i = 0; i < Count; i++)
+        {
+            var left = this[i];
+            var right = other[i];
+            if (!string.Equals(left.Id, right.Id, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(left.Pattern, right.Pattern, StringComparison.Ordinal) ||
+                left.Enabled != right.Enabled ||
+                left.Mode != right.Mode ||
+                left.IntervalMinutes != right.IntervalMinutes)
+                return false;
+        }
+        return true;
+    }
+
+    public override bool Equals(object? obj) => obj is FileDispatchRuleSet other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var rule in this)
+        {
+            hash.Add(rule.Id, StringComparer.OrdinalIgnoreCase);
+            hash.Add(rule.Pattern, StringComparer.Ordinal);
+            hash.Add(rule.Enabled);
+            hash.Add(rule.Mode);
+            hash.Add(rule.IntervalMinutes);
+        }
+        return hash.ToHashCode();
+    }
+}
+
 public sealed record AppSettings
 {
     public string Host { get; init; } = "";
@@ -53,8 +92,10 @@ public sealed record AppSettings
     public string ScheduleTime { get; init; } = "09:00";
     public int NegativeIntervalMinutes { get; init; } = 15;
     public int ArchiveRetentionDays { get; init; } = 90;
-    public IReadOnlyList<FileDispatchRule> FileRules { get; init; } =
-    [
+    public FileDispatchRuleSet FileRules { get; init; } = DefaultFileRules(15);
+
+    public static FileDispatchRuleSet DefaultFileRules(int negativeIntervalMinutes) => new()
+    {
         new()
         {
             Pattern = "orzeczenie-profilaktyczne-p1*.pdf",
@@ -67,9 +108,9 @@ public sealed record AppSettings
             Pattern = "NEG.orzeczenie-profilaktyczne-p1*.pdf",
             Enabled = true,
             Mode = FileDispatchMode.Interval,
-            IntervalMinutes = 15
+            IntervalMinutes = negativeIntervalMinutes
         }
-    ];
+    };
 
     public IReadOnlyList<TimeOnly> GetScheduleTimes()
     {
@@ -132,7 +173,7 @@ public static class Validation
         settings.GetScheduleTimes();
         Require(settings.NegativeIntervalMinutes is >= 1 and <= 1440, "Interwał NEG: 1–1440 minut.");
         Require(settings.ArchiveRetentionDays is >= 1 and <= 3650, "Retencja archiwum: 1–3650 dni.");
-        var rules = settings.FileRules ?? [];
+        var rules = settings.FileRules ?? new FileDispatchRuleSet();
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var rule in rules)
         {
