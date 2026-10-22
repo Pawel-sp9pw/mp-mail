@@ -8,6 +8,16 @@ namespace KsgMail.Tests;
 public sealed class CoreTests
 {
     [Fact]
+    public void TemplateDateUsesActualSendDateWhileMonthUsesSelectedPeriod()
+    {
+        var customer = new Customer { Name = "Firma testowa" };
+        var rendered = Templates.Render(
+            "{klient}|{miesiac}|{data}", customer, "2026-10", new DateOnly(2026, 10, 22));
+
+        Assert.Equal("Firma testowa|2026-10|2026-10-22", rendered);
+    }
+
+    [Fact]
     public void DailyScheduleHonorsTimeAndDisabledFlag()
     {
         using var workspace = new TestWorkspace();
