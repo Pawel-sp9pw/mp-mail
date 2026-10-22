@@ -486,7 +486,7 @@ public sealed class CoreTests
         File.WriteAllText(Path.Combine(workspace.Source, "SPECIAL-001.pdf"), "special");
         File.WriteAllText(Path.Combine(workspace.Source, "OTHER-001.pdf"), "other");
         File.WriteAllText(Path.Combine(workspace.Source, "NOTE-001.txt"), "note");
-        var rules = new List<FileDispatchRule>
+        var rules = new FileDispatchRuleSet
         {
             new() { Pattern = "SPECIAL-*.pdf", Enabled = false, Mode = FileDispatchMode.Interval, IntervalMinutes = 5 },
             new() { Pattern = "*.pdf", Enabled = true, Mode = FileDispatchMode.Scheduled },
