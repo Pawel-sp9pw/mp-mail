@@ -96,26 +96,49 @@
        <Separator Margin="0,14"/>
        <TextBlock Text="Reguły plików" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
        <TextBlock Text="Wzorce obsługują * i ?. Pierwsza pasująca aktywna reguła decyduje, z jakim harmonogramem plik zostanie wysłany." TextWrapping="Wrap" Foreground="#526477" Margin="0,0,0,8"/>
-       <DataGrid x:Name="FileRulesGrid" AutoGenerateColumns="False" CanUserAddRows="False" Height="230" SelectionMode="Single">
+       <DataGrid x:Name="FileRulesGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False"
+                 Height="230" SelectionMode="Single" SelectionUnit="FullRow" HeadersVisibility="Column">
         <DataGrid.Columns>
-         <DataGridCheckBoxColumn Header="Wł." Binding="{Binding Enabled, UpdateSourceTrigger=PropertyChanged}" Width="42"/>
-         <DataGridTextColumn Header="Nazwa / wzorzec" Binding="{Binding Pattern, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="180"/>
+         <DataGridTemplateColumn Header="Wł." Width="46">
+          <DataGridTemplateColumn.CellTemplate>
+           <DataTemplate>
+            <CheckBox IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="Włącz/wyłącz regułę"/>
+           </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+         </DataGridTemplateColumn>
+         <DataGridTemplateColumn Header="Nazwa / wzorzec" Width="*" MinWidth="180">
+          <DataGridTemplateColumn.CellTemplate>
+           <DataTemplate>
+            <TextBox Text="{Binding Pattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="2" Padding="4,2"/>
+           </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+         </DataGridTemplateColumn>
          <DataGridTemplateColumn Header="Tryb" Width="135">
           <DataGridTemplateColumn.CellTemplate>
            <DataTemplate>
-            <ComboBox SelectedValue="{Binding Mode, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Tag" Margin="2">
+            <ComboBox SelectedValue="{Binding Mode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Tag" Margin="2">
              <ComboBoxItem Content="Wg godzin" Tag="{x:Static core:FileDispatchMode.Scheduled}"/>
              <ComboBoxItem Content="Interwał" Tag="{x:Static core:FileDispatchMode.Interval}"/>
             </ComboBox>
            </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
          </DataGridTemplateColumn>
-         <DataGridTextColumn Header="Min." Binding="{Binding IntervalMinutes, UpdateSourceTrigger=PropertyChanged}" Width="55"/>
+         <DataGridTemplateColumn Header="Min." Width="70">
+          <DataGridTemplateColumn.CellTemplate>
+           <DataTemplate>
+            <TextBox Text="{Binding IntervalMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="2" Padding="4,2" HorizontalContentAlignment="Center"/>
+           </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+         </DataGridTemplateColumn>
         </DataGrid.Columns>
        </DataGrid>
        <WrapPanel Margin="0,6,0,0">
         <Button Content="Dodaj regułę" Click="AddFileRule"/>
         <Button Content="Usuń regułę" Click="RemoveFileRule"/>
+        <Button Content="Włącz/wyłącz" Click="ToggleFileRule"/>
         <Button Content="W górę" Click="MoveFileRuleUp"/>
         <Button Content="W dół" Click="MoveFileRuleDown"/>
        </WrapPanel>
