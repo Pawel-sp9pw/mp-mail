@@ -328,6 +328,18 @@ public partial class MainWindow : Window
         fileRules.Remove(rule);
     }
 
+    private void ToggleFileRule(object senderObject, RoutedEventArgs args)
+    {
+        if (FileRulesGrid.SelectedItem is not FileDispatchRule rule)
+        {
+            ShowError(new UserException("Wybierz regułę do włączenia lub wyłączenia."));
+            return;
+        }
+        rule.Enabled = !rule.Enabled;
+        FileRulesGrid.Items.Refresh();
+        FileRulesGrid.SelectedItem = rule;
+    }
+
     private void MoveFileRuleUp(object senderObject, RoutedEventArgs args)
     {
         if (FileRulesGrid.SelectedItem is not FileDispatchRule rule) return;
