@@ -14,18 +14,25 @@ public sealed class WindowsScheduler
         return new XDocument(new XDeclaration("1.0", "utf-16", null),
             new XElement(ns + "Task", new XAttribute("version", "1.2"),
                 new XElement(ns + "Triggers",
-                    settings.GetScheduleTimes().Select(time => new XElement(ns + "CalendarTrigger",
-                        new XElement(ns + "StartBoundary", "2020-01-01T" + time.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)),
-                        new XElement(ns + "Enabled", true),
-                        new XElement(ns + "ScheduleByDay", new XElement(ns + "DaysInterval", 1)))),
-                    new XElement(ns + "CalendarTrigger",
-                        new XElement(ns + "StartBoundary", "2020-01-01T00:00:00"),
-                        new XElement(ns + "Enabled", true),
-                        new XElement(ns + "Repetition",
-                            new XElement(ns + "Interval", $"PT{settings.NegativeIntervalMinutes}M"),
-                            new XElement(ns + "Duration", "P1D"),
-                            new XElement(ns + "StopAtDurationEnd", false)),
-                        new XElement(ns + "ScheduleByDay", new XElement(ns + "DaysInterval", 1))),
+                    settings.FileRules.Any(rule => rule.Enabled && rule.Mode == FileDispatchMode.Scheduled)
+                        ? settings.GetScheduleTimes().Select(time => new XElement(ns + "CalendarTrigger",
+                            new XElement(ns + "StartBoundary", "2020-01-01T" + time.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)),
+                            new XElement(ns + "Enabled", true),
+                            new XElement(ns + "ScheduleByDay", new XElement(ns + "DaysInterval", 1))))
+                        : [],
+                    settings.FileRules
+                        .Where(rule => rule.Enabled && rule.Mode == FileDispatchMode.Interval)
+                        .Select(rule => rule.IntervalMinutes)
+                        .Distinct()
+                        .Order()
+                        .Select(interval => new XElement(ns + "CalendarTrigger",
+                            new XElement(ns + "StartBoundary", "2020-01-01T00:00:00"),
+                            new XElement(ns + "Enabled", true),
+                            new XElement(ns + "Repetition",
+                                new XElement(ns + "Interval", $"PT{interval}M"),
+                                new XElement(ns + "Duration", "P1D"),
+                                new XElement(ns + "StopAtDurationEnd", false)),
+                            new XElement(ns + "ScheduleByDay", new XElement(ns + "DaysInterval", 1)))),
                     new XElement(ns + "LogonTrigger",
                         new XElement(ns + "Enabled", true),
                         new XElement(ns + "UserId", userSid))),
