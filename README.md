@@ -9,6 +9,7 @@ Aplikacja Windows do codziennej wysyłki dokumentów do firm przez SMTP. Jest to
 - wielokrotny wybór firm, zaznaczanie wszystkich widocznych i operacje masowe: aktywacja, dezaktywacja i usuwanie;
 - skanowanie wyłącznie plików bezpośrednio w katalogu firmy — podkatalogi nie są przeszukiwane;
 - konfigurowalne reguły plików z obsługą wzorców `*` i `?`; reguły można dodawać, usuwać, wyłączać i zmieniać ich kolejność;
+- weryfikacja pracodawcy w każdym wysyłanym PDF: program odczytuje pole `(nazwa i adres pracodawcy)`, bierze część przed pierwszym przecinkiem i porównuje ją z nazwą firmy w bazie; niezgodny lub nierozpoznawalny PDF blokuje paczkę tej firmy;
 - każda reguła może działać wg skonfigurowanych godzin zbiorczych albo we własnym interwale minutowym; reguły z tym samym interwałem są pakowane razem;
 - po aktualizacji zachowane są dotychczasowe reguły: `orzeczenie-profilaktyczne-p1*.pdf` wg godzin oraz `NEG.orzeczenie-profilaktyczne-p1*.pdf` w interwale 15 minut (lub dotychczas skonfigurowanym);
 - SMTP STARTTLS / SSL/TLS, test połączenia i retry;
@@ -68,7 +69,7 @@ Rejestr rozpoczęcia partii jest zapisywany atomowo w bazie, również gdy nie b
 
 Po sprawdzeniu wysyłki zbiorczej aplikacja wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Trwająca lub niepewna wcześniejsza wysyłka zbiorcza blokuje pozostałe terminy tego samego dnia, aby nie powielać dokumentów. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<okres>/`: pierwszy termin zachowuje okres `RRRR-MM-DD`, kolejne używają `SCHED-RRRR-MM-DD-HHmm`. Dzięki temu wcześniejsze zapisy pojedynczej wysyłki nadal chronią pierwszy termin przed powtórzeniem. Program nie przeszukuje żadnych podkatalogów firmy. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
 
-Wersja 0.10.2 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
+Wersja 0.11.0 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -106,10 +107,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.10.2
+.\build.ps1 -Version 0.11.0
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.10.2-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.11.0-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
@@ -137,4 +138,14 @@ Nie jest używany żaden zewnętrzny serwer aktualizacji poza GitHub Releases pr
 
 - `{data}` oznacza rzeczywistą lokalną datę przygotowania/wysyłki wiadomości, np. `2026-10-22`.
 - `{miesiac}` nadal oznacza miesiąc wybranego okresu, np. `2026-10`.
+
+
+
+## Weryfikacja pracodawcy w PDF
+
+Przed utworzeniem ZIP-a MP Mail odczytuje tekst z każdego pliku PDF zakwalifikowanego do wysyłki. Wyszukuje pole **„nazwa i adres pracodawcy”**, a z wartości bierze nazwę firmy znajdującą się przed pierwszym przecinkiem. Nazwa jest porównywana z polem **Nazwa firmy** zapisanym w MP Mail po ujednoliceniu wielkości liter i wielokrotnych spacji.
+
+Jeżeli pola nie można odczytać albo nazwa pracodawcy z PDF różni się od nazwy firmy w bazie, plik nie jest pakowany ani wysyłany, a firma otrzymuje status błędu w podglądzie/historii.
+
+W ustawieniach SMTP można opcjonalnie podać **Adres e-mail do powiadomień o błędach**. Na ten adres MP Mail wysyła krótkie powiadomienie o błędach i wynikach niepewnych związanych z wysyłką, m.in. o niezgodności pracodawcy w PDF. Powiadomienia nie zawierają załączników.
 
