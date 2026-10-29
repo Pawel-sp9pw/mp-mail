@@ -263,6 +263,7 @@ public partial class MainWindow : Window
         SmtpPasswordLabel.Text = settings.PasswordProtected.Length == 0 ? "Hasło SMTP" : "Hasło SMTP (zapisane; wpisz, aby zmienić)";
         SenderEmail.Text = settings.SenderEmail;
         SenderName.Text = settings.SenderName;
+        ErrorNotificationEmail.Text = settings.ErrorNotificationEmail;
         AttachmentLimit.Text = settings.MaxAttachmentMb.ToString(CultureInfo.InvariantCulture);
         SourceLimit.Text = settings.MaxSourceMb.ToString(CultureInfo.InvariantCulture);
         RetryCount.Text = settings.RetryCount.ToString(CultureInfo.InvariantCulture);
@@ -291,6 +292,7 @@ public partial class MainWindow : Window
             Username = SmtpUsername.Text.Trim(),
             PasswordProtected = SmtpPassword.Password.Length == 0 ? settings.PasswordProtected : secrets.Protect(SmtpPassword.Password),
             SenderEmail = SenderEmail.Text.Trim(), SenderName = SenderName.Text.Trim(),
+            ErrorNotificationEmail = ErrorNotificationEmail.Text.Trim(),
             MaxAttachmentMb = Number(AttachmentLimit, "Limit ZIP"), MaxSourceMb = Number(SourceLimit, "Limit plików"),
             RetryCount = Number(RetryCount, "Liczba prób"), ScheduleEnabled = ScheduleEnabled.IsChecked == true,
             ScheduleTime = ScheduleTime.Text.Trim(),
