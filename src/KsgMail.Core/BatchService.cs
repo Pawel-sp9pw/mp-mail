@@ -43,6 +43,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     var files = await Task.Run(() => archives.Discover(customer.SourceDirectory,
                         settings.MaxSourceMb * 1048576L, settings.FileRules,
                         rule => RuleMatchesGroup(rule, group), GroupDescription(group)), cancellationToken);
+                    await Task.Run(() => EmployerPdfValidator.ValidateFiles(files, customer.Name), cancellationToken);
                     await Task.Run(() => archives.Create(path, files, customer, settings.MaxAttachmentMb * 1048576L, cancellationToken), cancellationToken);
                     batch.Items.Add(new(customer, period, subject, body, path, files, new FileInfo(path).Length, null, false));
                 }
@@ -75,6 +76,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                 if (!mail.Ready)
                 {
                     repository.Log(mail.Customer, mail.Period, DeliveryStatus.Failed, mail.Error!);
+                    await NotifyErrorSafeAsync(batch.Settings, mail.Customer, mail.Period,
+                        DeliveryStatus.Failed, mail.Error!, cancellationToken, progress);
                     continue;
                 }
                 var messageId = SmtpSender.NewMessageId();
@@ -103,6 +106,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     }
                 }
                 repository.Finish(mail.Customer, mail.Period, outcome.Status, detail, messageId);
+                if (outcome.Status is DeliveryStatus.Failed or DeliveryStatus.Uncertain)
+                    await NotifyErrorSafeAsync(batch.Settings, mail.Customer, mail.Period,
+                        outcome.Status, detail, cancellationToken, progress);
                 progress?.Report($"{mail.Name}: {detail}");
             }
         }
@@ -243,6 +249,20 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
     private static string GroupDescription(string group) =>
         group == "scheduled" ? "wysyłka wg godzin" :
         group.StartsWith("interval:", StringComparison.Ordinal) ? $"interwał {group["interval:".Length..]} min" : group;
+
+    private async Task NotifyErrorSafeAsync(AppSettings settings, Customer customer, string period,
+        DeliveryStatus status, string detail, CancellationToken cancellationToken, IProgress<string>? progress)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ErrorNotificationEmail)) return;
+        try
+        {
+            await sender.NotifyErrorAsync(settings, customer, period, status, detail, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            progress?.Report($"{customer.Name}: nie udało się wysłać powiadomienia o błędzie: {ErrorMessages.Describe(exception)}");
+        }
+    }
 
     private static string TemplatePeriod(string period)
     {
