@@ -85,6 +85,7 @@ public sealed record AppSettings
     public string PasswordProtected { get; init; } = "";
     public string SenderEmail { get; init; } = "";
     public string SenderName { get; init; } = "Medycyna pracy";
+    public string ErrorNotificationEmail { get; init; } = "";
     public int MaxAttachmentMb { get; init; } = 20;
     public int MaxSourceMb { get; init; } = 500;
     public int RetryCount { get; init; } = 3;
@@ -166,6 +167,8 @@ public static class Validation
         Require(!string.IsNullOrWhiteSpace(settings.Username), "Podaj login SMTP.");
         Require(!string.IsNullOrEmpty(settings.PasswordProtected), "Ustaw hasło SMTP.");
         Email(settings.SenderEmail, "Adres nadawcy");
+        if (!string.IsNullOrWhiteSpace(settings.ErrorNotificationEmail))
+            Email(settings.ErrorNotificationEmail, "Adres powiadomień o błędach");
         Require(!settings.SenderName.Contains('\r') && !settings.SenderName.Contains('\n'), "Nazwa nadawcy nie może zawierać nowych linii.");
         Require(settings.MaxAttachmentMb is >= 1 and <= 100, "Limit ZIP: 1–100 MB.");
         Require(settings.MaxSourceMb is >= 1 and <= 2048, "Limit plików źródłowych: 1–2048 MB.");
