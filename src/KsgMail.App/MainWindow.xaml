@@ -81,6 +81,8 @@
        <TextBlock x:Name="SmtpPasswordLabel" Text="Hasło SMTP"/><PasswordBox x:Name="SmtpPassword"/>
        <TextBlock Text="Adres e-mail nadawcy"/><TextBox x:Name="SenderEmail"/>
        <TextBlock Text="Nazwa nadawcy"/><TextBox x:Name="SenderName"/>
+       <TextBlock Text="Adres e-mail do powiadomień o błędach" Margin="0,8,0,0"/><TextBox x:Name="ErrorNotificationEmail"/>
+       <TextBlock Text="Opcjonalny. Otrzymuje powiadomienia o błędach i niepewnych wynikach wysyłki, w tym o niezgodności pracodawcy w PDF." TextWrapping="Wrap" Foreground="#526477" Margin="0,0,0,8"/>
        <WrapPanel><Button Content="Zapisz konfigurację" Click="SaveSettings"/><Button Content="Test połączenia" Click="TestConnection"/></WrapPanel>
       </StackPanel>
       <StackPanel Grid.Column="2">
