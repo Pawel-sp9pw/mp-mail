@@ -23,6 +23,25 @@ na stanowisku
     }
 
     [Fact]
+    public async Task EmployerMismatchBlocksPackageBeforeSmtp()
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-mismatch.pdf");
+        TestPdf.WriteMedicalCertificate(path, "Inna firma");
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        using var batch = await service.PrepareAsync(
+            [workspace.Customer], workspace.Settings, "2026-10", false, null, CancellationToken.None);
+
+        var mail = Assert.Single(batch.Items);
+        Assert.False(mail.Ready);
+        Assert.Contains("nie zgadza się z firmą w bazie", mail.Error, StringComparison.CurrentCultureIgnoreCase);
+        Assert.Equal(0, sender.Count);
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
     public void ErrorNotificationEmailIsOptionalButValidatedWhenProvided()
     {
         using var workspace = new TestWorkspace();
