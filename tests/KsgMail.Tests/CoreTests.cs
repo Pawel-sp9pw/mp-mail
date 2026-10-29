@@ -77,7 +77,7 @@ na stanowisku
     public async Task ScheduledRunSendsOncePerCompanyPerDay()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), workspace.Customer.Name);
         workspace.Repository.SaveCustomer(workspace.Customer);
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00" });
         var sender = new RecordingSender();
@@ -91,7 +91,7 @@ na stanowisku
         Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "2026-10-12", "orzeczenie-profilaktyczne-p1-001.pdf")));
         await service.RunScheduledAsync(new DateTime(2026, 10, 12, 12, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "next document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), workspace.Customer.Name);
         await service.RunScheduledAsync(new DateTime(2026, 10, 13, 8, 59, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 13, 9, 0, 0), CancellationToken.None);
@@ -103,10 +103,10 @@ na stanowisku
     public void DiscoverUsesOnlyRootDirectoryAndSeparatesNegativeFiles()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.pdf"), "current");
-        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-999.pdf"), "negative");
-        File.WriteAllText(Path.Combine(workspace.Source, "inne-orzeczenie.pdf"), "other");
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p2-123.pdf"), "other");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.pdf"), workspace.Customer.Name);
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-999.pdf"), workspace.Customer.Name);
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "inne-orzeczenie.pdf"), workspace.Customer.Name);
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p2-123.pdf"), workspace.Customer.Name);
         File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-123.txt"), "other");
         var archive = Path.Combine(workspace.Source, "archiwum", "2026-10-11");
         Directory.CreateDirectory(archive);
@@ -129,7 +129,7 @@ na stanowisku
     public void DiscoverRejectsDirectoryWithoutMatchingMedicalCertificates()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "other.pdf"), "other");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "other.pdf"), workspace.Customer.Name);
         var service = new ArchiveService(workspace.Secrets);
 
         var exception = Assert.Throws<UserException>(() => service.Discover(workspace.Source, 10 * 1048576L));
@@ -184,7 +184,7 @@ na stanowisku
     public async Task NegativeFilesSendOncePerConfiguredInterval()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-001.pdf"), "negative");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-001.pdf"), workspace.Customer.Name);
         workspace.Repository.SaveCustomer(workspace.Customer);
         workspace.Repository.SaveSettings(workspace.Settings with
         {
@@ -199,7 +199,7 @@ na stanowisku
         Assert.Equal(1, sender.Count);
         Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "NEG-2026-10-14-0900", "NEG.orzeczenie-profilaktyczne-p1-001.pdf")));
 
-        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-002.pdf"), "negative2");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-002.pdf"), workspace.Customer.Name);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 14, 9, 10, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 14, 9, 16, 0), CancellationToken.None);
@@ -414,12 +414,12 @@ na stanowisku
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00, 13:00" });
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "morning");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), workspace.Customer.Name);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 8, 59, 0), CancellationToken.None);
         Assert.Equal(0, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 9, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "afternoon");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), workspace.Customer.Name);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 12, 59, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 13, 0, 0), CancellationToken.None);
@@ -427,7 +427,7 @@ na stanowisku
         Assert.Equal(2, sender.Count);
         Assert.All(sender.Messages, mail => Assert.Equal("2026-10-16 / 2026-10", mail.Subject));
         Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "SCHED-2026-10-16-1300", "orzeczenie-profilaktyczne-p1-002.pdf")));
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-003.pdf"), "tomorrow");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-003.pdf"), workspace.Customer.Name);
         await service.RunScheduledAsync(new DateTime(2026, 10, 17, 9, 0, 0), CancellationToken.None);
         Assert.Equal(3, sender.Count);
     }
@@ -439,12 +439,12 @@ na stanowisku
         var customer = workspace.Customer;
         workspace.Repository.SaveCustomer(customer);
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00, 13:00, 16:00" });
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), workspace.Customer.Name);
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 15, 0, 0), CancellationToken.None);
         Assert.Empty(sender.Messages);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), "later document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-002.pdf"), workspace.Customer.Name);
         workspace.Repository.Finish(customer, "SCHED-2026-10-16-1600", DeliveryStatus.Uncertain, "unknown", "message-test");
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 16, 0, 0), CancellationToken.None);
         Assert.Equal(0, sender.Count);
@@ -486,7 +486,7 @@ na stanowisku
         workspace.Repository.SaveCustomer(customer);
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "09:00, 13:00" });
         workspace.Repository.Finish(customer, "2026-10-16", status, "unresolved", "earlier-message");
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), "document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-001.pdf"), workspace.Customer.Name);
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
         await service.RunScheduledAsync(new DateTime(2026, 10, 16, 13, 0, 0), CancellationToken.None);
@@ -518,8 +518,8 @@ na stanowisku
     public void ConfigurableFileRulesRespectOrderDisabledStateAndWildcards()
     {
         using var workspace = new TestWorkspace();
-        File.WriteAllText(Path.Combine(workspace.Source, "SPECIAL-001.pdf"), "special");
-        File.WriteAllText(Path.Combine(workspace.Source, "OTHER-001.pdf"), "other");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "SPECIAL-001.pdf"), workspace.Customer.Name);
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "OTHER-001.pdf"), workspace.Customer.Name);
         File.WriteAllText(Path.Combine(workspace.Source, "NOTE-001.txt"), "note");
         var rules = new FileDispatchRuleSet
         {
@@ -557,8 +557,8 @@ na stanowisku
             ScheduleEnabled = true,
             FileRules = rules
         });
-        File.WriteAllText(Path.Combine(workspace.Source, "FAST-001.pdf"), "fast");
-        File.WriteAllText(Path.Combine(workspace.Source, "SLOW-001.pdf"), "slow");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "FAST-001.pdf"), workspace.Customer.Name);
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "SLOW-001.pdf"), workspace.Customer.Name);
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
 
@@ -568,7 +568,7 @@ na stanowisku
         Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "INT-5-2026-10-22-0905", "FAST-001.pdf")));
         Assert.True(File.Exists(Path.Combine(workspace.Source, "archiwum", "INT-15-2026-10-22-0900", "SLOW-001.pdf")));
 
-        File.WriteAllText(Path.Combine(workspace.Source, "FAST-002.pdf"), "fast2");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "FAST-002.pdf"), workspace.Customer.Name);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 22, 9, 9, 0), CancellationToken.None);
         Assert.Equal(2, sender.Count);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 22, 9, 10, 0), CancellationToken.None);
