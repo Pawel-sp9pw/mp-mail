@@ -30,14 +30,17 @@ na stanowisku
         TestPdf.WriteMedicalCertificate(path, "Inna firma");
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+        var settings = workspace.Settings with { ErrorNotificationEmail = "errors@example.test" };
 
         using var batch = await service.PrepareAsync(
-            [workspace.Customer], workspace.Settings, "2026-10", false, null, CancellationToken.None);
+            [workspace.Customer], settings, "2026-10", false, null, CancellationToken.None);
 
         var mail = Assert.Single(batch.Items);
         Assert.False(mail.Ready);
         Assert.Contains("nie zgadza się z firmą w bazie", mail.Error, StringComparison.CurrentCultureIgnoreCase);
+        await service.SendAsync(batch, false, null, CancellationToken.None);
         Assert.Equal(0, sender.Count);
+        Assert.Equal(1, sender.ErrorNotificationCount);
         Assert.True(File.Exists(path));
     }
 
@@ -637,12 +640,20 @@ na stanowisku
     private sealed class RecordingSender : IMailSender
     {
         public int Count { get; private set; }
+        public int ErrorNotificationCount { get; private set; }
         public List<PreparedMail> Messages { get; } = [];
         public Task<SendOutcome> SendAsync(AppSettings settings, PreparedMail mail, string messageId, CancellationToken cancellationToken)
         {
             Count++;
             Messages.Add(mail);
             return Task.FromResult(new SendOutcome(DeliveryStatus.Success, "accepted"));
+        }
+
+        public Task NotifyErrorAsync(AppSettings settings, Customer customer, string period, DeliveryStatus status,
+            string detail, CancellationToken cancellationToken)
+        {
+            ErrorNotificationCount++;
+            return Task.CompletedTask;
         }
     }
 }
