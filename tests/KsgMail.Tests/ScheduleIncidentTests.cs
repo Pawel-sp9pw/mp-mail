@@ -21,13 +21,13 @@ public sealed class ScheduleIncidentTests
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
         var document = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf");
-        File.WriteAllText(document, "noon");
+        TestPdf.WriteMedicalCertificate(document, workspace.Customer.Name);
 
         await service.RunAutomationsAsync(new DateTime(2026, 10, 19, 11, 59, 0), CancellationToken.None);
         Assert.Equal(0, sender.Count);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 19, 12, 0, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
-        File.WriteAllText(document, "evening");
+        TestPdf.WriteMedicalCertificate(document, workspace.Customer.Name);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 19, 17, 59, 0), CancellationToken.None);
         Assert.Equal(1, sender.Count);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 19, 18, 0, 0), CancellationToken.None);
@@ -53,7 +53,7 @@ public sealed class ScheduleIncidentTests
             var customer = workspace.Customer;
             workspace.Repository.SaveCustomer(customer);
             var document = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf");
-            File.WriteAllText(document, "noon");
+            TestPdf.WriteMedicalCertificate(document, customer.Name);
             var sender = new RecordingSender();
             var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
             var trace = new List<string>();
@@ -73,7 +73,7 @@ public sealed class ScheduleIncidentTests
                 Assert.False(Directory.Exists(previewDirectory));
                 Assert.Contains(trace, message => message.Contains("Wyczyszczono podgląd"));
 
-                File.WriteAllText(document, "evening");
+                TestPdf.WriteMedicalCertificate(document, customer.Name);
                 var eveningPreview = await service.PrepareAsync([customer], settings, "2026-10", false, null, CancellationToken.None);
                 previewField.SetValue(window, eveningPreview);
                 await window.CheckScheduleAsync(new DateTime(2026, 10, 19, 17, 59, 0));
@@ -117,7 +117,7 @@ public sealed class ScheduleIncidentTests
             var settings = workspace.Settings with { ScheduleEnabled = true, ScheduleTime = $"{now:HH:mm}, {now.AddMinutes(1):HH:mm}" };
             workspace.Repository.SaveSettings(settings);
             workspace.Repository.SaveCustomer(workspace.Customer);
-            File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), "document");
+            TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), workspace.Customer.Name);
             var sender = new RecordingSender();
             var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
             var window = new MainWindow(workspace.Repository, workspace.Secrets, new SmtpSender(workspace.Secrets), service);
@@ -160,8 +160,8 @@ public sealed class ScheduleIncidentTests
         using var workspace = new TestWorkspace();
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "12:00, 18:00" });
         workspace.Repository.SaveCustomer(workspace.Customer);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), "standard");
-        File.WriteAllText(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-test.pdf"), "negative");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), workspace.Customer.Name);
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "NEG.orzeczenie-profilaktyczne-p1-test.pdf"), workspace.Customer.Name);
         var sender = new RecordingSender();
         var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
         await service.RunAutomationsAsync(new DateTime(2026, 10, 19, 12, 0, 0), CancellationToken.None);
@@ -176,7 +176,7 @@ public sealed class ScheduleIncidentTests
         using var workspace = new TestWorkspace();
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "12:00, 18:00" });
         workspace.Repository.SaveCustomer(workspace.Customer);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), "document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), workspace.Customer.Name);
         var dataDirectory = Path.Combine(workspace.Root, "diagnostics");
         if (blockedDirectory) File.WriteAllText(dataDirectory, "blocked");
         var sender = new RecordingSender();
