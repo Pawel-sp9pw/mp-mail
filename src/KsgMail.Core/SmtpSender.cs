@@ -10,6 +10,8 @@ public sealed record SendOutcome(DeliveryStatus Status, string Detail);
 public interface IMailSender
 {
     Task<SendOutcome> SendAsync(AppSettings settings, PreparedMail mail, string messageId, CancellationToken cancellationToken);
+    Task NotifyErrorAsync(AppSettings settings, Customer customer, string period, DeliveryStatus status,
+        string detail, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 public sealed class SmtpSender(ISecretProtector secrets, Func<SmtpClient>? clientFactory = null) : IMailSender
@@ -35,6 +37,37 @@ public sealed class SmtpSender(ISecretProtector secrets, Func<SmtpClient>? clien
             settings.Security == TransportSecurity.SslOnConnect ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls,
             cancellationToken);
         await client.AuthenticateAsync(settings.Username, secrets.Unprotect(settings.PasswordProtected), cancellationToken);
+    }
+
+    public async Task NotifyErrorAsync(AppSettings settings, Customer customer, string period, DeliveryStatus status,
+        string detail, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ErrorNotificationEmail)) return;
+
+        using var message = new MimeMessage
+        {
+            Subject = $"MP Mail — błąd wysyłki — {customer.Name}",
+            MessageId = NewMessageId(),
+            Date = DateTimeOffset.Now
+        };
+        message.From.Add(new MailboxAddress(settings.SenderName, settings.SenderEmail));
+        message.To.Add(MailboxAddress.Parse(settings.ErrorNotificationEmail));
+        message.Body = new TextPart("plain")
+        {
+            Text =
+                $"MP Mail zgłosił problem z wysyłką.\n\n" +
+                $"Firma: {customer.Name}\n" +
+                $"Adres odbiorcy: {customer.Email}\n" +
+                $"Okres/partia: {period}\n" +
+                $"Status: {status}\n" +
+                $"Szczegóły: {detail}\n" +
+                $"Czas lokalny: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n"
+        };
+
+        using var client = CreateClient(60000);
+        await ConnectAsync(client, settings, cancellationToken);
+        await client.SendAsync(message, cancellationToken);
+        await client.DisconnectAsync(true, CancellationToken.None);
     }
 
     public async Task<SendOutcome> SendAsync(AppSettings settings, PreparedMail mail, string messageId, CancellationToken cancellationToken)
