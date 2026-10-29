@@ -22,7 +22,7 @@ public sealed class StrictScheduleTests
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "12:00, 13:00, 18:00" });
         workspace.Repository.SaveCustomer(workspace.Customer);
         var document = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf");
-        File.WriteAllText(document, "standard");
+        TestPdf.WriteMedicalCertificate(document, workspace.Customer.Name);
         var sender = new RecordingSender();
         var service = Service(workspace, sender);
 
@@ -41,7 +41,7 @@ public sealed class StrictScheduleTests
         using var workspace = new TestWorkspace();
         workspace.Repository.SaveSettings(workspace.Settings with { ScheduleEnabled = true, ScheduleTime = "13:00, 18:00" });
         workspace.Repository.SaveCustomer(workspace.Customer);
-        File.WriteAllText(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), "standard");
+        TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-test.pdf"), workspace.Customer.Name);
         var sender = new RecordingSender();
 
         await Service(workspace, sender).RunScheduledAsync(new DateTime(2026, 10, 19, 13, 0, 0).AddMilliseconds(milliseconds), CancellationToken.None);
@@ -133,7 +133,7 @@ public sealed class StrictScheduleTests
         workspace.Repository.SaveCustomer(company);
         Document(company, "standard");
         var negative = Path.Combine(company.SourceDirectory, "NEG.orzeczenie-profilaktyczne-p1-test.pdf");
-        File.WriteAllText(negative, "negative");
+        TestPdf.WriteMedicalCertificate(negative, company.Name);
         var sender = new RecordingSender();
         var service = Service(workspace, sender);
 
@@ -194,7 +194,7 @@ public sealed class StrictScheduleTests
     }
 
     private static void Document(Customer company, string suffix) =>
-        File.WriteAllText(Path.Combine(company.SourceDirectory, $"orzeczenie-profilaktyczne-p1-{suffix}.pdf"), "document");
+        TestPdf.WriteMedicalCertificate(Path.Combine(company.SourceDirectory, $"orzeczenie-profilaktyczne-p1-{suffix}.pdf"), company.Name);
 
     private static BatchService Service(TestWorkspace workspace, IMailSender sender) =>
         new(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
