@@ -8,6 +8,31 @@ namespace KsgMail.Tests;
 public sealed class CoreTests
 {
     [Fact]
+    public void EmployerFieldUsesTextBeforeFirstComma()
+    {
+        const string text = """
+zatrudniony(-na)/przyjmowany(-na)*) do pracy w
+Testowa firma, Mysłowicka 13, 40-486 Katowice
+(nazwa i adres pracodawcy)
+na stanowisku
+""";
+
+        Assert.Equal("Testowa firma", EmployerPdfValidator.ExtractEmployerNameFromText(text));
+        Assert.True(EmployerPdfValidator.CompanyNamesEqual("  Testowa   firma ", "testowa firma"));
+        Assert.False(EmployerPdfValidator.CompanyNamesEqual("Testowa firma", "Inna firma"));
+    }
+
+    [Fact]
+    public void ErrorNotificationEmailIsOptionalButValidatedWhenProvided()
+    {
+        using var workspace = new TestWorkspace();
+        Validation.Settings(workspace.Settings with { ErrorNotificationEmail = "" });
+        Validation.Settings(workspace.Settings with { ErrorNotificationEmail = "errors@example.test" });
+        Assert.Throws<UserException>(() =>
+            Validation.Settings(workspace.Settings with { ErrorNotificationEmail = "bad-address" }));
+    }
+
+    [Fact]
     public void TemplateDateUsesActualSendDateWhileMonthUsesSelectedPeriod()
     {
         var customer = new Customer { Name = "Firma testowa" };
