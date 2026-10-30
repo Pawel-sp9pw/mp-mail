@@ -48,7 +48,7 @@ public static class DeliveryReportExporter
         var page = builder.AddPage(PageSize.A4);
         double y = 800;
 
-        void Line(string text, double size = 9, double x = 40)
+        void Line(string text, decimal size = 9m, double x = 40)
         {
             if (y < 55)
             {
@@ -57,31 +57,31 @@ public static class DeliveryReportExporter
             }
 
             page.AddText(text, size, new PdfPoint(x, y), font);
-            y -= size + 6;
+            y -= (double)size + 6;
         }
 
-        Line("MP Mail - raport wysyłki orzeczeń", 15);
-        Line($"Firma: {companyName}", 11);
-        Line($"Wygenerowano: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", 9);
+        Line("MP Mail - raport wysyłki orzeczeń", 15m);
+        Line($"Firma: {companyName}", 11m);
+        Line($"Wygenerowano: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", 9m);
         y -= 8;
-        Line("Data       Godzina   Okres                         Liczba orzeczeń", 9);
-        Line(new string('-', 78), 8);
+        Line("Data       Godzina   Okres                         Liczba orzeczeń", 9m);
+        Line(new string('-', 78), 8m);
 
         foreach (var log in rows)
         {
             var local = log.Timestamp.ToLocalTime();
             var count = log.FileCount?.ToString(CultureInfo.InvariantCulture) ?? "brak danych";
             var period = log.Period.Length > 28 ? log.Period[..28] : log.Period;
-            Line($"{local:yyyy-MM-dd}  {local:HH:mm:ss}  {period,-28}  {count}", 9);
+            Line($"{local:yyyy-MM-dd}  {local:HH:mm:ss}  {period,-28}  {count}", 9m);
         }
 
         y -= 8;
         var known = rows.Where(row => row.FileCount.HasValue).Sum(row => row.FileCount!.Value);
         var unknown = rows.Count(row => !row.FileCount.HasValue);
-        Line($"Liczba udanych wysyłek: {rows.Count}", 10);
-        Line($"Łączna liczba orzeczeń z wpisów posiadających dane: {known}", 10);
+        Line($"Liczba udanych wysyłek: {rows.Count}", 10m);
+        Line($"Łączna liczba orzeczeń z wpisów posiadających dane: {known}", 10m);
         if (unknown > 0)
-            Line($"Starsze wpisy bez zapisanej liczby orzeczeń: {unknown}", 9);
+            Line($"Starsze wpisy bez zapisanej liczby orzeczeń: {unknown}", 9m);
 
         File.WriteAllBytes(path, builder.Build());
     }
