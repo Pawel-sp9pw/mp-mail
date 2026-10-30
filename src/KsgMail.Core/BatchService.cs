@@ -43,6 +43,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     var files = await Task.Run(() => archives.Discover(customer.SourceDirectory,
                         settings.MaxSourceMb * 1048576L, settings.FileRules,
                         rule => RuleMatchesGroup(rule, group), GroupDescription(group)), cancellationToken);
+                    if (files.Count == 0)
+                    {
+                        batch.Items.Add(new(customer, period, subject, body, "", [], 0,
+                            "Katalog nie zawiera plików do wysłania.", true));
+                        continue;
+                    }
                     await Task.Run(() => EmployerPdfValidator.ValidateFiles(files, customer.Name), cancellationToken);
                     await Task.Run(() => archives.Create(path, files, customer, settings.MaxAttachmentMb * 1048576L, cancellationToken), cancellationToken);
                     batch.Items.Add(new(customer, period, subject, body, path, files, new FileInfo(path).Length, null, false));
@@ -59,7 +65,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
         catch { batch.Dispose(); throw; }
     }
 
-    public async Task SendAsync(PreparedBatch batch, bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken)
+    public async Task SendAsync(PreparedBatch batch, bool allowResend, IProgress<string>? progress,
+        CancellationToken cancellationToken, bool notifyErrors = true)
     {
         if (!await gate.WaitAsync(0, cancellationToken)) throw new UserException("Trwa już wysyłka.");
         try
@@ -67,7 +74,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             foreach (var mail in batch.Items)
             {
                 if (cancellationToken.IsCancellationRequested) break;
-                progress?.Report($"Wysyłka: {mail.Name}");
+                progress?.Report($"Sprawdzanie: {mail.Name}");
                 if (mail.Skipped)
                 {
                     repository.Log(mail.Customer, mail.Period, DeliveryStatus.Skipped, mail.Status);
@@ -76,8 +83,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                 if (!mail.Ready)
                 {
                     repository.Log(mail.Customer, mail.Period, DeliveryStatus.Failed, mail.Error!);
-                    await NotifyErrorSafeAsync(batch.Settings, mail.Customer, mail.Period,
-                        DeliveryStatus.Failed, mail.Error!, cancellationToken, progress);
+                    if (notifyErrors)
+                        await NotifyErrorSafeAsync(batch.Settings, mail.Customer, mail.Period,
+                            DeliveryStatus.Failed, mail.Error!, cancellationToken, progress);
                     continue;
                 }
                 var messageId = SmtpSender.NewMessageId();
@@ -86,6 +94,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                     repository.Log(mail.Customer, mail.Period, DeliveryStatus.Skipped, "Blokada ponownej wysyłki.");
                     continue;
                 }
+                progress?.Report($"Wysyłka: {mail.Name}");
                 SendOutcome outcome;
                 try { outcome = await sender.SendAsync(batch.Settings, mail, messageId, cancellationToken); }
                 catch (Exception)
@@ -105,8 +114,9 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                         detail += $" Wysłano, ale archiwizacja plików nie powiodła się: {ErrorMessages.Describe(exception)}";
                     }
                 }
-                repository.Finish(mail.Customer, mail.Period, outcome.Status, detail, messageId);
-                if (outcome.Status is DeliveryStatus.Failed or DeliveryStatus.Uncertain)
+                repository.Finish(mail.Customer, mail.Period, outcome.Status, detail, messageId,
+                    outcome.Status == DeliveryStatus.Success ? mail.Files.Count : null);
+                if (notifyErrors && outcome.Status is DeliveryStatus.Failed or DeliveryStatus.Uncertain)
                     await NotifyErrorSafeAsync(batch.Settings, mail.Customer, mail.Period,
                         outcome.Status, detail, cancellationToken, progress);
                 progress?.Report($"{mail.Name}: {detail}");
@@ -224,8 +234,19 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             try
             {
                 if (archives.HasMatchingFiles(customer.SourceDirectory, repository.Settings().FileRules,
-                        rule => RuleMatchesGroup(rule, dispatchGroup))) selected.Add(customer);
-                else noFiles++;
+                        rule => RuleMatchesGroup(rule, dispatchGroup)))
+                {
+                    selected.Add(customer);
+                }
+                else
+                {
+                    noFiles++;
+                    if (dispatchGroup == "scheduled" &&
+                        Directory.Exists(customer.SourceDirectory) &&
+                        !Directory.EnumerateFiles(customer.SourceDirectory).Any())
+                        repository.Log(customer, period, DeliveryStatus.Skipped,
+                            "Katalog nie zawiera plików do wysłania.");
+                }
             }
             catch (Exception exception)
             {
