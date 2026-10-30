@@ -111,6 +111,49 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
+    public async Task MissingFolderInAutomationDoesNotRetrySendOrSpamAlertsEveryMinute()
+    {
+        using var workspace = new TestWorkspace();
+        var missing = Path.Combine(workspace.Root, "missing-company-folder");
+        var customer = workspace.Customer with { SourceDirectory = missing };
+        workspace.Repository.SaveCustomer(customer);
+        workspace.Repository.SaveSettings(workspace.Settings with
+        {
+            ScheduleEnabled = true,
+            ScheduleTime = "09:00",
+            FileRules =
+            [
+                new()
+                {
+                    Pattern = "orzeczenie-profilaktyczne-p1*.pdf",
+                    Enabled = true,
+                    Mode = FileDispatchMode.Interval,
+                    IntervalMinutes = 1
+                }
+            ]
+        });
+
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 30, 9, 0, 0), CancellationToken.None);
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 30, 9, 1, 0), CancellationToken.None);
+        await service.RunAutomationsAsync(new DateTime(2026, 10, 30, 9, 2, 0), CancellationToken.None);
+
+        Assert.Equal(0, sender.Count);
+        Assert.Equal(0, sender.ErrorNotificationCount);
+
+        var logs = workspace.Repository.Logs();
+        var warning = Assert.Single(logs.Where(log =>
+            log.CustomerName == customer.Name &&
+            log.Status == DeliveryStatus.Skipped &&
+            log.Detail.Contains("Katalog dokumentów nie istnieje", StringComparison.CurrentCultureIgnoreCase)));
+        Assert.NotNull(warning);
+        Assert.DoesNotContain(logs, log =>
+            log.CustomerName == customer.Name && log.Status == DeliveryStatus.Failed);
+    }
+
+    [Fact]
     public async Task EmptyFolderIsWarningAndNeverSendsOrNotifiesInManualMode()
     {
         using var workspace = new TestWorkspace();
