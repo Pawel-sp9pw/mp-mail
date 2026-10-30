@@ -27,9 +27,25 @@ public sealed class Repository
                 Status TEXT NOT NULL, Detail TEXT NOT NULL, MessageId TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS ScheduledBatches (
                 Period TEXT PRIMARY KEY, StartedAt TEXT NOT NULL);
-            PRAGMA user_version=2;
+            PRAGMA user_version=3;
             """;
         command.ExecuteNonQuery();
+
+        using var schema = connection.CreateCommand();
+        schema.CommandText = "PRAGMA table_info(DeliveryLog)";
+        using var reader = schema.ExecuteReader();
+        var hasFileCount = false;
+        while (reader.Read())
+            if (reader.GetString(1).Equals("FileCount", StringComparison.OrdinalIgnoreCase))
+                hasFileCount = true;
+        reader.Close();
+
+        if (!hasFileCount)
+        {
+            using var migration = connection.CreateCommand();
+            migration.CommandText = "ALTER TABLE DeliveryLog ADD COLUMN FileCount INTEGER NULL";
+            migration.ExecuteNonQuery();
+        }
     }
 
     private SqliteConnection Open()
@@ -166,12 +182,12 @@ public sealed class Repository
         command.Parameters.AddWithValue("$id", customer.Id);
         command.Parameters.AddWithValue("$period", period);
         if (command.ExecuteNonQuery() == 0) return false;
-        AddLog(connection, transaction, customer, period, DeliveryStatus.Pending, "Rozpoczęto wysyłkę.", messageId);
+        AddLog(connection, transaction, customer, period, DeliveryStatus.Pending, "Rozpoczęto wysyłkę.", messageId, null);
         transaction.Commit();
         return true;
     }
 
-    public void Finish(Customer customer, string period, DeliveryStatus status, string detail, string messageId)
+    public void Finish(Customer customer, string period, DeliveryStatus status, string detail, string messageId, int? fileCount = null)
     {
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
@@ -187,27 +203,31 @@ public sealed class Repository
         command.ExecuteNonQuery();
         using var logCommand = connection.CreateCommand();
         logCommand.Transaction = transaction;
-        logCommand.CommandText = "UPDATE DeliveryLog SET Status=$status, Detail=$detail WHERE MessageId=$message AND Status='Pending'";
+        logCommand.CommandText = "UPDATE DeliveryLog SET Status=$status, Detail=$detail, FileCount=$count WHERE MessageId=$message AND Status='Pending'";
         logCommand.Parameters.AddWithValue("$status", status.ToString());
         logCommand.Parameters.AddWithValue("$detail", detail);
+        logCommand.Parameters.AddWithValue("$count", (object?)fileCount ?? DBNull.Value);
         logCommand.Parameters.AddWithValue("$message", messageId);
         if (logCommand.ExecuteNonQuery() == 0)
-            AddLog(connection, transaction, customer, period, status, detail, messageId);
+            AddLog(connection, transaction, customer, period, status, detail, messageId, fileCount);
         transaction.Commit();
     }
 
-    public void Log(Customer customer, string period, DeliveryStatus status, string detail, string messageId = "")
+    public void Log(Customer customer, string period, DeliveryStatus status, string detail, string messageId = "", int? fileCount = null)
     {
         using var connection = Open();
-        AddLog(connection, null, customer, period, status, detail, messageId);
+        AddLog(connection, null, customer, period, status, detail, messageId, fileCount);
     }
 
     private static void AddLog(SqliteConnection connection, SqliteTransaction? transaction, Customer customer,
-        string period, DeliveryStatus status, string detail, string messageId)
+        string period, DeliveryStatus status, string detail, string messageId, int? fileCount)
     {
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "INSERT INTO DeliveryLog VALUES(NULL,$time,$name,$email,$period,$status,$detail,$message)";
+        command.CommandText = """
+            INSERT INTO DeliveryLog(Timestamp,CustomerName,Email,Period,Status,Detail,MessageId,FileCount)
+            VALUES($time,$name,$email,$period,$status,$detail,$message,$count)
+            """;
         command.Parameters.AddWithValue("$time", DateTimeOffset.UtcNow.ToString("O"));
         command.Parameters.AddWithValue("$name", customer.Name);
         command.Parameters.AddWithValue("$email", customer.Email);
@@ -215,6 +235,7 @@ public sealed class Repository
         command.Parameters.AddWithValue("$status", status.ToString());
         command.Parameters.AddWithValue("$detail", detail);
         command.Parameters.AddWithValue("$message", messageId);
+        command.Parameters.AddWithValue("$count", (object?)fileCount ?? DBNull.Value);
         command.ExecuteNonQuery();
     }
 
@@ -222,14 +243,18 @@ public sealed class Repository
     {
         using var connection = Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT * FROM DeliveryLog ORDER BY Id DESC LIMIT $limit";
+        command.CommandText = """
+            SELECT Id,Timestamp,CustomerName,Email,Period,Status,Detail,MessageId,FileCount
+            FROM DeliveryLog ORDER BY Id DESC LIMIT $limit
+            """;
         command.Parameters.AddWithValue("$limit", limit);
         using var reader = command.ExecuteReader();
         var logs = new List<DeliveryLog>();
         while (reader.Read())
             logs.Add(new DeliveryLog(reader.GetInt64(0), DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture),
                 reader.GetString(2), reader.GetString(3), reader.GetString(4),
-                Enum.Parse<DeliveryStatus>(reader.GetString(5)), reader.GetString(6), reader.GetString(7)));
+                Enum.Parse<DeliveryStatus>(reader.GetString(5)), reader.GetString(6), reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetInt32(8)));
         return logs;
     }
 
