@@ -69,7 +69,7 @@ Rejestr rozpoczęcia partii jest zapisywany atomowo w bazie, również gdy nie b
 
 Po sprawdzeniu wysyłki zbiorczej aplikacja wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Trwająca lub niepewna wcześniejsza wysyłka zbiorcza blokuje pozostałe terminy tego samego dnia, aby nie powielać dokumentów. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<okres>/`: pierwszy termin zachowuje okres `RRRR-MM-DD`, kolejne używają `SCHED-RRRR-MM-DD-HHmm`. Dzięki temu wcześniejsze zapisy pojedynczej wysyłki nadal chronią pierwszy termin przed powtórzeniem. Program nie przeszukuje żadnych podkatalogów firmy. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
 
-Wersja 0.11.0 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
+Wersja 0.11.1 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -107,10 +107,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.11.0
+.\build.ps1 -Version 0.11.1
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.11.0-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.11.1-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
@@ -143,9 +143,14 @@ Nie jest używany żaden zewnętrzny serwer aktualizacji poza GitHub Releases pr
 
 ## Weryfikacja pracodawcy w PDF
 
-Przed utworzeniem ZIP-a MP Mail odczytuje tekst z każdego pliku PDF zakwalifikowanego do wysyłki. Wyszukuje pole **„nazwa i adres pracodawcy”**, a z wartości bierze nazwę firmy znajdującą się przed pierwszym przecinkiem. Nazwa jest porównywana z polem **Nazwa firmy** zapisanym w MP Mail po ujednoliceniu wielkości liter i wielokrotnych spacji.
+Przed utworzeniem ZIP-a MP Mail odczytuje tekst z każdego pliku PDF zakwalifikowanego do wysyłki. Wyszukuje frazę **„do pracy w”**, od niej odczytuje wartość pracodawcy aż do pola **„nazwa i adres pracodawcy”**, a następnie bierze nazwę firmy znajdującą się przed pierwszym przecinkiem. Nazwa jest porównywana z polem **Nazwa firmy** zapisanym w MP Mail po ujednoliceniu wielkości liter i wielokrotnych spacji.
 
 Jeżeli pola nie można odczytać albo nazwa pracodawcy z PDF różni się od nazwy firmy w bazie, plik nie jest pakowany ani wysyłany, a firma otrzymuje status błędu w podglądzie/historii.
 
 W ustawieniach SMTP można opcjonalnie podać **Adres e-mail do powiadomień o błędach**. Na ten adres MP Mail wysyła krótkie powiadomienie o błędach i wynikach niepewnych związanych z wysyłką, m.in. o niezgodności pracodawcy w PDF. Powiadomienia nie zawierają załączników.
 
+
+
+### Czytelność błędów
+
+Długie komunikaty błędów można przewijać w dolnym polu statusu. W podglądzie po zaznaczeniu wiersza z błędem pełny opis jest również wyświetlany w przewijanym polu szczegółów.
