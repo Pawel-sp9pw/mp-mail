@@ -156,7 +156,9 @@
      <StackPanel DockPanel.Dock="Top">
       <WrapPanel><TextBlock Text="Okres (RRRR-MM)" VerticalAlignment="Center" Margin="0,0,10,0"/><TextBox x:Name="Period" Width="100"/>
        <Button Content="Podgląd wszystkich aktywnych" Click="PreviewAll"/><Button Content="Podgląd wybranej firmy" Click="PreviewSelected"/></WrapPanel>
-      <CheckBox x:Name="AllowResend" Content="Zezwól na ponowną wysyłkę w tym okresie" Margin="0,4,0,12"/>
+      <CheckBox x:Name="AllowResend" IsChecked="True" IsEnabled="False"
+                Content="Wysyłka ręczna zawsze wymusza ponowną weryfikację i może ponowić wysyłkę w tym okresie"
+                Margin="0,4,0,12"/>
      </StackPanel>
      <WrapPanel DockPanel.Dock="Bottom"><Button x:Name="SendButton" Content="Wyślij przygotowane wiadomości…" Click="SendPrepared" IsEnabled="False"/><Button Content="Wyczyść podgląd" Click="ClearPreview"/></WrapPanel>
      <Grid>
