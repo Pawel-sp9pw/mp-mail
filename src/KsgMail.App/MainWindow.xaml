@@ -199,10 +199,29 @@
    </TabItem>
    <TabItem Header="  Historia wysyłek  ">
     <DockPanel Margin="14">
-     <WrapPanel DockPanel.Dock="Top">
-      <Button Content="Odśwież" Click="RefreshLogs"/>
-      <TextBlock Text="Ostatnie 1000 zdarzeń · czas lokalny" VerticalAlignment="Center"/>
-     </WrapPanel>
+     <StackPanel DockPanel.Dock="Top">
+      <WrapPanel>
+       <Button Content="Odśwież" Click="RefreshLogs"/>
+       <TextBlock Text="Ostatnie 1000 zdarzeń · czas lokalny" VerticalAlignment="Center"/>
+      </WrapPanel>
+      <WrapPanel Margin="0,8,0,8">
+       <TextBlock Text="Firma:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+       <ComboBox x:Name="HistoryCompanyFilter" Width="260" SelectionChanged="HistoryFilterChanged"/>
+       <TextBlock Text="Status:" VerticalAlignment="Center" Margin="14,0,6,0"/>
+       <ComboBox x:Name="HistoryStatusFilter" Width="150" SelectedIndex="0" SelectionChanged="HistoryFilterChanged">
+        <ComboBoxItem Content="Wszystkie"/>
+        <ComboBoxItem Content="Poprawne"/>
+        <ComboBoxItem Content="Ostrzeżenie"/>
+        <ComboBoxItem Content="Błąd"/>
+       </ComboBox>
+       <TextBlock x:Name="HistoryCountText" VerticalAlignment="Center" Margin="14,0,0,0" Foreground="#526477"/>
+      </WrapPanel>
+      <WrapPanel Margin="0,0,0,8">
+       <Button Content="Raport PDF dla firmy…" Click="ExportCompanyReportPdf"/>
+       <Button Content="Raport CSV dla firmy…" Click="ExportCompanyReportCsv"/>
+       <TextBlock Text="Raport obejmuje udane wysyłki wybranej firmy i liczbę wysłanych orzeczeń." VerticalAlignment="Center" Foreground="#526477" Margin="8,0,0,0"/>
+      </WrapPanel>
+     </StackPanel>
      <Grid>
       <Grid.RowDefinitions>
        <RowDefinition Height="*"/>
@@ -216,8 +235,9 @@
        <DataGrid.Columns>
         <DataGridTextColumn Header="Data" Binding="{Binding LocalTime}" Width="145"/>
         <DataGridTextColumn Header="Firma" Binding="{Binding CustomerName}" Width="220"/>
-        <DataGridTextColumn Header="Okres" Binding="{Binding Period}" Width="130"/>
-        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110"/>
+        <DataGridTextColumn Header="Okres" Binding="{Binding Period}" Width="160"/>
+        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="150"/>
+        <DataGridTextColumn Header="Orzeczenia" Binding="{Binding FileCount}" Width="90"/>
         <DataGridTextColumn Header="Informacja" Binding="{Binding Detail}" Width="1100"/>
        </DataGrid.Columns>
       </DataGrid>
