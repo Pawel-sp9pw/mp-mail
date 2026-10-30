@@ -53,19 +53,38 @@ public static class EmployerPdfValidator
             .Where(line => line.Length > 0)
             .ToList();
 
+        const string startPhrase = "do pracy w";
+        var normalizedStart = Normalize(startPhrase);
+        var normalizedLabel = Normalize(EmployerLabel);
+
         for (var index = 0; index < lines.Count; index++)
         {
-            if (!Normalize(lines[index]).Contains(Normalize(EmployerLabel), StringComparison.Ordinal))
-                continue;
+            var normalizedLine = Normalize(lines[index]);
+            var startIndex = normalizedLine.IndexOf(normalizedStart, StringComparison.Ordinal);
+            if (startIndex < 0) continue;
 
-            for (var previous = index - 1; previous >= 0; previous--)
+            var valueParts = new List<string>();
+            var originalLine = lines[index];
+            var phraseIndex = originalLine.IndexOf(startPhrase, StringComparison.OrdinalIgnoreCase);
+            if (phraseIndex >= 0)
             {
-                var candidate = lines[previous].Trim();
-                if (candidate.Length == 0) continue;
-                var comma = candidate.IndexOf(',');
-                var name = (comma >= 0 ? candidate[..comma] : candidate).Trim();
-                if (name.Length > 0) return name;
+                var remainder = originalLine[(phraseIndex + startPhrase.Length)..].Trim();
+                if (remainder.Length > 0) valueParts.Add(remainder);
             }
+
+            for (var next = index + 1; next < lines.Count; next++)
+            {
+                if (Normalize(lines[next]).Contains(normalizedLabel, StringComparison.Ordinal))
+                    break;
+                valueParts.Add(lines[next]);
+            }
+
+            var value = string.Join(" ", valueParts).Trim();
+            if (value.Length == 0) continue;
+
+            var comma = value.IndexOf(',');
+            var name = (comma >= 0 ? value[..comma] : value).Trim();
+            if (name.Length > 0) return name;
         }
 
         return null;
