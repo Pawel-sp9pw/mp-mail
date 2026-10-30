@@ -405,8 +405,16 @@ public partial class MainWindow : Window
     private void PreviewSelectedMail(object senderObject, SelectionChangedEventArgs args)
     {
         if (PreviewGrid.SelectedItem is not PreparedMail mail) return;
-        PreviewSubject.Text = mail.Subject;
-        PreviewBody.Text = mail.Body;
+        if (!string.IsNullOrWhiteSpace(mail.Error))
+        {
+            PreviewSubject.Text = $"Błąd — {mail.Name}";
+            PreviewBody.Text = mail.Error;
+        }
+        else
+        {
+            PreviewSubject.Text = mail.Subject;
+            PreviewBody.Text = mail.Body;
+        }
         PreviewFiles.ItemsSource = mail.Files;
     }
 
