@@ -6,7 +6,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
 
     public async Task<PreparedBatch> PrepareAsync(IEnumerable<Customer> customers, AppSettings settings, string period,
         bool allowResend, IProgress<string>? progress, CancellationToken cancellationToken, bool negativeOnly = false,
-        string? dispatchGroup = null, DateOnly? sendDate = null)
+        string? dispatchGroup = null, DateOnly? sendDate = null, bool skipEmployerValidation = false)
     {
         Validation.Settings(settings);
         var templatePeriod = TemplatePeriod(period);
@@ -49,7 +49,8 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                             "Katalog nie zawiera plików do wysłania.", true));
                         continue;
                     }
-                    await Task.Run(() => EmployerPdfValidator.ValidateFiles(files, customer.Name), cancellationToken);
+                    if (!skipEmployerValidation)
+                        await Task.Run(() => EmployerPdfValidator.ValidateFiles(files, customer.Name), cancellationToken);
                     await Task.Run(() => archives.Create(path, files, customer, settings.MaxAttachmentMb * 1048576L, cancellationToken), cancellationToken);
                     batch.Items.Add(new(customer, period, subject, body, path, files, new FileInfo(path).Length, null, false));
                 }
