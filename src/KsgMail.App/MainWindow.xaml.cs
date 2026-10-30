@@ -393,13 +393,16 @@ public partial class MainWindow : Window
     {
         if (!customers.Any(customer => customer.Active)) throw new UserException("Brak aktywnych firm.");
         InvalidatePreview();
-        preparedResend = AllowResend.IsChecked == true;
-        prepared = await batches.PrepareAsync(customers, repository.Settings(), Period.Text.Trim(), preparedResend,
+
+        // Tryb ręczny zawsze wymusza świeże sprawdzenie plików i PDF-ów.
+        // Historia wcześniejszych wysyłek nie może pominąć walidacji ani zablokować świadomej wysyłki ręcznej.
+        preparedResend = true;
+        prepared = await batches.PrepareAsync(customers, repository.Settings(), Period.Text.Trim(), true,
             new Progress<string>(text => StatusText.Text = text), cancellationToken);
         PreviewGrid.ItemsSource = prepared.Items;
         SendButton.IsEnabled = prepared.Items.Any(mail => mail.Ready);
-        StatusText.Text = $"Podgląd gotowy: {prepared.Items.Count(mail => mail.Ready)} do wysłania, " +
-            $"{prepared.Items.Count(mail => mail.Error != null)} błędów, {prepared.Items.Count(mail => mail.Skipped)} pominiętych.";
+        StatusText.Text = $"Podgląd ręczny po ponownej weryfikacji: {prepared.Items.Count(mail => mail.Ready)} do wysłania, " +
+            $"{prepared.Items.Count(mail => mail.Error != null)} błędów.";
     });
 
     private void PreviewSelectedMail(object senderObject, SelectionChangedEventArgs args)
@@ -421,22 +424,66 @@ public partial class MainWindow : Window
     private async void SendPrepared(object senderObject, RoutedEventArgs args)
     {
         if (prepared == null) return;
-        var confirmedPreview = prepared;
-        var count = prepared.Items.Count(mail => mail.Ready);
-        var warning = preparedResend ? "\nUWAGA: zezwolono na powtórną wysyłkę; możliwe duplikaty." : "";
-        if (MessageBox.Show(this, $"Wysłać {count} wiadomości z przygotowanego podglądu?{warning}",
-            "Potwierdź wysyłkę", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        if (prepared != confirmedPreview)
+
+        var preview = prepared;
+        var customers = preview.Items
+            .Select(mail => mail.Customer)
+            .GroupBy(customer => customer.Id)
+            .Select(group => group.First())
+            .ToList();
+        var period = Period.Text.Trim();
+        var count = preview.Items.Count(mail => mail.Ready);
+
+        if (MessageBox.Show(this,
+                $"Ponownie zweryfikować aktualne pliki i wysłać {count} wiadomości?\n\n" +
+                "Ręczna wysyłka ignoruje blokadę wcześniejszej wysyłki dla tego okresu. " +
+                "Przed SMTP wszystkie PDF-y zostaną odczytane i sprawdzone ponownie.",
+                "Potwierdź ręczną wysyłkę", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        if (prepared != preview)
         {
             StatusText.Text = "Podgląd został wyczyszczony przez automat. Przygotuj nowy podgląd przed ręczną wysyłką.";
             return;
         }
+
         await RunAsync(async cancellationToken =>
         {
-            await batches.SendAsync(prepared, preparedResend,
+            StatusText.Text = "Ponowna weryfikacja plików przed ręczną wysyłką…";
+
+            // Nie używamy ZIP-a z wcześniejszego podglądu. Budujemy wszystko od nowa,
+            // aby wymusić ponowny odczyt PDF i porównanie pracodawcy bezpośrednio przed SMTP.
+            using var verified = await batches.PrepareAsync(
+                customers,
+                repository.Settings(),
+                period,
+                true,
+                new Progress<string>(text => StatusText.Text = text),
+                cancellationToken);
+
+            var ready = verified.Items.Count(mail => mail.Ready);
+            var errors = verified.Items.Count(mail => mail.Error != null);
+
+            if (ready == 0)
+            {
+                // SendAsync zapisze błędy walidacji do historii i wyśle skonfigurowane alerty,
+                // ale nie wykona SMTP dla żadnej niepoprawnej paczki.
+                await batches.SendAsync(verified, true,
+                    new Progress<string>(text => StatusText.Text = text), cancellationToken);
+                InvalidatePreview();
+                StatusText.Text = $"Ręczna wysyłka wstrzymana po ponownej weryfikacji: {errors} błędów, 0 poprawnych paczek.";
+                LoadLogs();
+                return;
+            }
+
+            await batches.SendAsync(verified, true,
                 new Progress<string>(text => StatusText.Text = text), cancellationToken);
+
             InvalidatePreview();
-            StatusText.Text = "Zakończono wysyłkę. Sprawdź historię i statusy.";
+            LoadLogs();
+            StatusText.Text = errors == 0
+                ? $"Zakończono ręczną wysyłkę po ponownej weryfikacji: wysłano {ready}."
+                : $"Zakończono ręczną wysyłkę: poprawnych {ready}, błędów {errors}.";
         });
     }
 
