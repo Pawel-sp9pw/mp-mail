@@ -199,16 +199,39 @@
    </TabItem>
    <TabItem Header="  Historia wysyłek  ">
     <DockPanel Margin="14">
-     <WrapPanel DockPanel.Dock="Top"><Button Content="Odśwież" Click="RefreshLogs"/><TextBlock Text="Ostatnie 1000 zdarzeń · czas lokalny" VerticalAlignment="Center"/></WrapPanel>
-     <DataGrid x:Name="LogsGrid">
-      <DataGrid.Columns>
-       <DataGridTextColumn Header="Data" Binding="{Binding LocalTime}" Width="145"/>
-       <DataGridTextColumn Header="Firma" Binding="{Binding CustomerName}" Width="130"/>
-       <DataGridTextColumn Header="Okres" Binding="{Binding Period}" Width="75"/>
-       <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
-       <DataGridTextColumn Header="Informacja" Binding="{Binding Detail}" Width="*" MinWidth="400"/>
-      </DataGrid.Columns>
-     </DataGrid>
+     <WrapPanel DockPanel.Dock="Top">
+      <Button Content="Odśwież" Click="RefreshLogs"/>
+      <TextBlock Text="Ostatnie 1000 zdarzeń · czas lokalny" VerticalAlignment="Center"/>
+     </WrapPanel>
+     <Grid>
+      <Grid.RowDefinitions>
+       <RowDefinition Height="*"/>
+       <RowDefinition Height="180"/>
+      </Grid.RowDefinitions>
+
+      <DataGrid x:Name="LogsGrid"
+                SelectionMode="Single"
+                ScrollViewer.HorizontalScrollBarVisibility="Visible"
+                ScrollViewer.VerticalScrollBarVisibility="Auto">
+       <DataGrid.Columns>
+        <DataGridTextColumn Header="Data" Binding="{Binding LocalTime}" Width="145"/>
+        <DataGridTextColumn Header="Firma" Binding="{Binding CustomerName}" Width="220"/>
+        <DataGridTextColumn Header="Okres" Binding="{Binding Period}" Width="130"/>
+        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110"/>
+        <DataGridTextColumn Header="Informacja" Binding="{Binding Detail}" Width="1100"/>
+       </DataGrid.Columns>
+      </DataGrid>
+
+      <DockPanel Grid.Row="1" Margin="0,12,0,0">
+       <TextBlock DockPanel.Dock="Top" Text="Pełna informacja / błąd" FontWeight="SemiBold" Margin="0,0,0,6"/>
+       <TextBox IsReadOnly="True"
+                AcceptsReturn="True"
+                TextWrapping="NoWrap"
+                VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Auto"
+                Text="{Binding SelectedItem.Detail, ElementName=LogsGrid, Mode=OneWay}"/>
+      </DockPanel>
+     </Grid>
     </DockPanel>
    </TabItem>
   </TabControl>
