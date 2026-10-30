@@ -69,7 +69,7 @@ Rejestr rozpoczęcia partii jest zapisywany atomowo w bazie, również gdy nie b
 
 Po sprawdzeniu wysyłki zbiorczej aplikacja wykonuje retencję archiwum dla wszystkich skonfigurowanych firm. Pliki starsze niż ustawiona liczba dni są usuwane, a puste katalogi archiwum sprzątane. Czas retencji liczony jest od momentu przeniesienia pliku do archiwum. Trwająca lub niepewna wcześniejsza wysyłka zbiorcza blokuje pozostałe terminy tego samego dnia, aby nie powielać dokumentów. Po statusie Wysłano dokładnie te pliki, które trafiły do ZIP, są przenoszone do `archiwum/<okres>/`: pierwszy termin zachowuje okres `RRRR-MM-DD`, kolejne używają `SCHED-RRRR-MM-DD-HHmm`. Dzięki temu wcześniejsze zapisy pojedynczej wysyłki nadal chronią pierwszy termin przed powtórzeniem. Program nie przeszukuje żadnych podkatalogów firmy. Pozostałe pliki pozostają w katalogu firmy i nie są pakowane ani przenoszone.
 
-Wersja 0.11.2 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
+Wersja 0.11.3 dodaje konfigurowalne reguły plików i zachowuje zgodność z dotychczasową konfiguracją standard/NEG. Istniejące firmy, ustawienia SMTP, zaszyfrowane hasła, historia, retencja i blokady wysyłki pozostają zachowane.
 
 Testy automatyczne sprawdzają:
 - moment wejścia harmonogramu w stan „due”;
@@ -107,10 +107,10 @@ Windows x64, .NET SDK 8.0.425+, Inno Setup 6.
 ```powershell
 dotnet restore KsgMail.sln
 dotnet test KsgMail.sln -c Release
-.\build.ps1 -Version 0.11.2
+.\build.ps1 -Version 0.11.3
 ```
 
-Instalator: `artifacts/installer/MpMail-Setup-0.11.2-win-x64.exe`.
+Instalator: `artifacts/installer/MpMail-Setup-0.11.3-win-x64.exe`.
 
 GitHub Actions buduje i testuje każdy push do `main`, a także tworzy instalator i paczkę portable.
 
@@ -160,3 +160,8 @@ W ustawieniach SMTP można opcjonalnie podać **Adres e-mail do powiadomień o b
 ### Czytelność błędów
 
 Długie komunikaty błędów można przewijać w dolnym polu statusu. W podglądzie po zaznaczeniu wiersza z błędem pełny opis jest również wyświetlany w przewijanym polu szczegółów.
+
+
+### Historia wysyłek
+
+Zakładka **Historia wysyłek** ma wymuszony poziomy pasek przewijania tabeli oraz osobne pole **Pełna informacja / błąd** pod listą. Po zaznaczeniu wpisu pełny komunikat jest widoczny w polu z niezależnym przewijaniem pionowym i poziomym.
