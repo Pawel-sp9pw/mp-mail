@@ -430,11 +430,10 @@ public partial class MainWindow : Window
         if (prepared == null) return;
 
         var preview = prepared;
-        var customers = preview.Items
-            .Select(mail => mail.Customer)
-            .GroupBy(customer => customer.Id)
-            .Select(group => group.First())
-            .ToList();
+        var previewCustomerIds = preview.Items
+            .Select(mail => mail.Customer.Id)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var period = Period.Text.Trim();
         var count = preview.Items.Count(mail => mail.Ready);
 
@@ -455,10 +454,15 @@ public partial class MainWindow : Window
         {
             StatusText.Text = "Ponowna weryfikacja plików przed ręczną wysyłką…";
 
-            // Nie używamy ZIP-a z wcześniejszego podglądu. Budujemy wszystko od nowa,
-            // aby wymusić ponowny odczyt PDF i porównanie pracodawcy bezpośrednio przed SMTP.
+            // Nie używamy ani ZIP-a, ani obiektów firm z wcześniejszego podglądu.
+            // Pobieramy aktualne rekordy z bazy po Id, żeby zmiany nazwy/e-maila/katalogu
+            // wykonane po podglądzie były uwzględnione podczas ponownej walidacji PDF.
+            var currentCustomers = repository.Customers()
+                .Where(customer => previewCustomerIds.Contains(customer.Id))
+                .ToList();
+
             using var verified = await batches.PrepareAsync(
-                customers,
+                currentCustomers,
                 repository.Settings(),
                 period,
                 true,
