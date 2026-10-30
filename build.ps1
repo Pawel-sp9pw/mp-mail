@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.11.2",
+    [string]$Version = "0.11.3",
     [string]$InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 )
 $ErrorActionPreference = "Stop"
