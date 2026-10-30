@@ -235,7 +235,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             {
                 if (!Directory.Exists(customer.SourceDirectory))
                 {
-                    selected.Add(customer);
+                    noFiles++;
+                    const string missingDirectory = "Katalog dokumentów nie istnieje lub jest niedostępny. Wysyłkę pominięto.";
+                    if (!repository.HasRecentLog(customer.Name, DeliveryStatus.Skipped, missingDirectory,
+                            DateTimeOffset.UtcNow.AddDays(-1)))
+                        repository.Log(customer, period, DeliveryStatus.Skipped, missingDirectory);
+                    diagnostics?.Invoke($"{customer.Name}: {missingDirectory}");
                     continue;
                 }
 
@@ -248,8 +253,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                 {
                     noFiles++;
                     if (dispatchGroup == "scheduled" && !Directory.EnumerateFiles(customer.SourceDirectory).Any())
-                        repository.Log(customer, period, DeliveryStatus.Skipped,
-                            "Katalog nie zawiera plików do wysłania.");
+                    {
+                        const string emptyDirectory = "Katalog nie zawiera plików do wysłania.";
+                        if (!repository.HasRecentLog(customer.Name, DeliveryStatus.Skipped, emptyDirectory,
+                                DateTimeOffset.UtcNow.AddDays(-1)))
+                            repository.Log(customer, period, DeliveryStatus.Skipped, emptyDirectory);
+                    }
                 }
             }
             catch (Exception exception)
