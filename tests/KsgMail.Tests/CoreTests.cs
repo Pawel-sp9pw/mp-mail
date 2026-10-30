@@ -49,6 +49,38 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
+    public async Task ForcedManualPreparationCanSkipEmployerValidationForOneCompany()
+    {
+        using var workspace = new TestWorkspace();
+        TestPdf.WriteMedicalCertificate(
+            Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-force.pdf"),
+            "INNA FIRMA");
+
+        var sender = new RecordingSender();
+        var service = new BatchService(
+            workspace.Repository,
+            new ArchiveService(workspace.Secrets),
+            sender,
+            workspace.Temp);
+
+        using var normal = await service.PrepareAsync(
+            [workspace.Customer], workspace.Settings, "2026-10", true, null, CancellationToken.None);
+        var blocked = Assert.Single(normal.Items);
+        Assert.False(blocked.Ready);
+        Assert.Contains("nie zgadza się z firmą w bazie", blocked.Error, StringComparison.CurrentCultureIgnoreCase);
+
+        using var forced = await service.PrepareAsync(
+            [workspace.Customer], workspace.Settings, "2026-10", true, null, CancellationToken.None,
+            skipEmployerValidation: true);
+        var ready = Assert.Single(forced.Items);
+        Assert.True(ready.Ready);
+        Assert.Null(ready.Error);
+
+        await service.SendAsync(forced, true, null, CancellationToken.None, notifyErrors: false);
+        Assert.Equal(1, sender.Count);
+    }
+
+    [Fact]
     public async Task EmployerMismatchBlocksPackageBeforeSmtp()
     {
         using var workspace = new TestWorkspace();
