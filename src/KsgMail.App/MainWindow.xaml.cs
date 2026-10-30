@@ -425,6 +425,54 @@ public partial class MainWindow : Window
         PreviewFiles.ItemsSource = mail.Files;
     }
 
+    private async void ForceSendSelectedWithoutEmployerCheck(object senderObject, RoutedEventArgs args)
+    {
+        if (PreviewGrid.SelectedItem is not PreparedMail selected)
+        {
+            MessageBox.Show(this, "W podglądzie zaznacz jedną firmę.", "MP Mail");
+            return;
+        }
+
+        var current = repository.Customers()
+            .FirstOrDefault(customer => customer.Id.Equals(selected.Customer.Id, StringComparison.OrdinalIgnoreCase));
+        if (current == null)
+            throw new UserException("Nie znaleziono aktualnego rekordu tej firmy w bazie.");
+
+        var period = Period.Text.Trim();
+        var confirmed = MessageBox.Show(this,
+            $"Jednorazowo wysłać dla firmy {current.Name} z pominięciem porównania nazwy pracodawcy w PDF?\n\n" +
+            "Pliki zostaną ponownie odczytane i spakowane. Pozostałe zabezpieczenia pozostają aktywne.",
+            "Potwierdź wymuszoną wysyłkę", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirmed != MessageBoxResult.Yes) return;
+
+        await RunAsync(async cancellationToken =>
+        {
+            using var forced = await batches.PrepareAsync(
+                [current], repository.Settings(), period, true,
+                new Progress<string>(text => StatusText.Text = text),
+                cancellationToken, skipEmployerValidation: true);
+
+            if (forced.Items.Count != 1)
+                throw new UserException("Wymuszona wysyłka wymaga dokładnie jednej firmy.");
+
+            var mail = forced.Items[0];
+            await batches.SendAsync(forced, true,
+                new Progress<string>(text => StatusText.Text = text),
+                cancellationToken, notifyErrors: false);
+
+            LoadLogs();
+            if (mail.Ready)
+            {
+                InvalidatePreview();
+                StatusText.Text = $"Zakończono wymuszoną wysyłkę dla firmy {current.Name}.";
+            }
+            else
+            {
+                StatusText.Text = $"Wymuszona wysyłka nie została wykonana: {mail.Status}";
+            }
+        });
+    }
+
     private async void SendPrepared(object senderObject, RoutedEventArgs args)
     {
         if (prepared == null) return;
