@@ -87,6 +87,34 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
+    public async Task ManualRevalidationUsesFreshCompanyNameFromDatabase()
+    {
+        using var workspace = new TestWorkspace();
+        var original = workspace.Customer with { Name = "ANPACARS STARA NAZWA" };
+        workspace.Repository.SaveCustomer(original);
+
+        var path = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-refresh.pdf");
+        TestPdf.WriteMedicalCertificate(path, "ANPACARS SP. Z O.O.");
+
+        var stalePreviewCustomer = original;
+        var updated = original with { Name = "ANPACARS SP. Z O.O." };
+        workspace.Repository.SaveCustomer(updated);
+
+        var current = Assert.Single(workspace.Repository.Customers().Where(customer => customer.Id == stalePreviewCustomer.Id));
+        Assert.Equal("ANPACARS SP. Z O.O.", current.Name);
+
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        using var verified = await service.PrepareAsync(
+            [current], workspace.Settings, "2026-10", true, null, CancellationToken.None);
+
+        var mail = Assert.Single(verified.Items);
+        Assert.True(mail.Ready);
+        Assert.Null(mail.Error);
+    }
+
+    [Fact]
     public async Task ManualResendBypassesHistoryBlockAndRevalidatesPdfEveryTime()
     {
         using var workspace = new TestWorkspace();
