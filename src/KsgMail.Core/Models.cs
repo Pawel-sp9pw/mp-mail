@@ -139,7 +139,7 @@ public sealed record AppSettings
 }
 
 public sealed record DeliveryLog(long Id, DateTimeOffset Timestamp, string CustomerName,
-    string Email, string Period, DeliveryStatus Status, string Detail, string MessageId);
+    string Email, string Period, DeliveryStatus Status, string Detail, string MessageId, int? FileCount = null);
 
 public sealed record SourceFile(string FullPath, string RelativePath, long Length, DateTime LastWriteUtc);
 
