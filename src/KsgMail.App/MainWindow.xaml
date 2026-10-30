@@ -160,7 +160,11 @@
                 Content="Wysyłka ręczna zawsze wymusza ponowną weryfikację i może ponowić wysyłkę w tym okresie"
                 Margin="0,4,0,12"/>
      </StackPanel>
-     <WrapPanel DockPanel.Dock="Bottom"><Button x:Name="SendButton" Content="Wyślij przygotowane wiadomości…" Click="SendPrepared" IsEnabled="False"/><Button Content="Wyczyść podgląd" Click="ClearPreview"/></WrapPanel>
+     <WrapPanel DockPanel.Dock="Bottom">
+      <Button x:Name="SendButton" Content="Wyślij przygotowane wiadomości…" Click="SendPrepared" IsEnabled="False"/>
+      <Button Content="Wymuś wysyłkę wybranej bez sprawdzania firmy…" Click="ForceSendSelectedWithoutEmployerCheck"/>
+      <Button Content="Wyczyść podgląd" Click="ClearPreview"/>
+     </WrapPanel>
      <Grid>
       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="240"/></Grid.RowDefinitions>
       <DataGrid x:Name="PreviewGrid" SelectionMode="Single" SelectionChanged="PreviewSelectedMail">
