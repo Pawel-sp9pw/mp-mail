@@ -91,7 +91,32 @@ public static class EmployerPdfValidator
     }
 
     public static bool CompanyNamesEqual(string left, string right) =>
-        Normalize(left).Equals(Normalize(right), StringComparison.Ordinal);
+        NormalizeCompanyName(left).Equals(NormalizeCompanyName(right), StringComparison.Ordinal);
+
+    private static string NormalizeCompanyName(string value)
+    {
+        var normalized = Normalize(value);
+
+        // Jednoznaczne odpowiedniki form prawnych. PDF-y potrafią zawierać w warstwie tekstowej
+        // pełną nazwę formy prawnej, mimo że wizualnie wydrukowany jest skrót.
+        normalized = Regex.Replace(normalized,
+            @"\bSPÓŁKA\s+Z\s+OGRANICZONĄ\s+ODPOWIEDZIALNOŚCIĄ\b",
+            "SP Z OO", RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized,
+            @"\bSP[.]?\s*Z[.]?\s*O[.]?\s*O[.]?\b",
+            "SP Z OO", RegexOptions.CultureInvariant);
+
+        normalized = Regex.Replace(normalized,
+            @"\bSPÓŁKA\s+AKCYJNA\b",
+            "SA", RegexOptions.CultureInvariant);
+        normalized = Regex.Replace(normalized,
+            @"\bS[.]?\s*A[.]?\b",
+            "SA", RegexOptions.CultureInvariant);
+
+        normalized = Regex.Replace(normalized, @"[.,;:]+", " ");
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+        return normalized;
+    }
 
     private static string Normalize(string value)
     {
