@@ -22,7 +22,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             foreach (var customer in customers.Where(customer => customer.Active))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                progress?.Report($"Przygotowanie: {customer.Name}");
+                progress?.Report($"Sprawdzanie: {customer.Name}");
                 var effectiveSendDate = sendDate ?? DateOnly.FromDateTime(DateTime.Now);
                 var subject = Templates.Render(customer.Subject, customer, templatePeriod, effectiveSendDate);
                 var body = Templates.Render(customer.Body, customer, templatePeriod, effectiveSendDate);
@@ -116,7 +116,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                 }
                 repository.Finish(mail.Customer, mail.Period, outcome.Status, detail, messageId,
                     outcome.Status == DeliveryStatus.Success ? mail.Files.Count : null);
-                if (notifyErrors && outcome.Status is DeliveryStatus.Failed or DeliveryStatus.Uncertain)
+                if (notifyErrors && (outcome.Status is DeliveryStatus.Failed or DeliveryStatus.Uncertain))
                     await NotifyErrorSafeAsync(batch.Settings, mail.Customer, mail.Period,
                         outcome.Status, detail, cancellationToken, progress);
                 progress?.Report($"{mail.Name}: {detail}");
@@ -233,6 +233,12 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             }
             try
             {
+                if (!Directory.Exists(customer.SourceDirectory))
+                {
+                    selected.Add(customer);
+                    continue;
+                }
+
                 if (archives.HasMatchingFiles(customer.SourceDirectory, repository.Settings().FileRules,
                         rule => RuleMatchesGroup(rule, dispatchGroup)))
                 {
@@ -241,9 +247,7 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
                 else
                 {
                     noFiles++;
-                    if (dispatchGroup == "scheduled" &&
-                        Directory.Exists(customer.SourceDirectory) &&
-                        !Directory.EnumerateFiles(customer.SourceDirectory).Any())
+                    if (dispatchGroup == "scheduled" && !Directory.EnumerateFiles(customer.SourceDirectory).Any())
                         repository.Log(customer, period, DeliveryStatus.Skipped,
                             "Katalog nie zawiera plików do wysłania.");
                 }
@@ -251,9 +255,10 @@ public sealed class BatchService(Repository repository, ArchiveService archives,
             catch (Exception exception)
             {
                 errors++;
-                var detail = ErrorMessages.ForCustomer(customer.Name, exception);
-                repository.Log(customer, period, DeliveryStatus.Failed, detail);
-                diagnostics?.Invoke(detail);
+                diagnostics?.Invoke(ErrorMessages.ForCustomer(customer.Name, exception));
+                // Przekazujemy firmę dalej: PrepareAsync zapisze dokładny błąd,
+                // a SendAsync w trybie harmonogramu wyśle powiadomienie o błędzie.
+                selected.Add(customer);
             }
         }
         diagnostics?.Invoke($"Termin {period}: do wysyłki {selected.Count}; nieaktywne {inactive}; już wysłane lub wynik niepewny {blocked}; brak pasujących plików lub niedostępny katalog {noFiles}; błędy {errors}.");
