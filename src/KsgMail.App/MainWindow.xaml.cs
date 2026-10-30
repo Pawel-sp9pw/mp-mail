@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private readonly Action<string> scheduleTrace;
     private bool scheduleCheckRequested;
     private readonly ObservableCollection<FileDispatchRule> fileRules = [];
+    private List<DeliveryLog> allLogs = [];
+    private bool loadingHistoryFilters;
 
     public MainWindow(Repository repository, ISecretProtector secrets, SmtpSender sender, BatchService batches,
         Action<string>? scheduleTrace = null)
@@ -462,28 +464,31 @@ public partial class MainWindow : Window
                 cancellationToken);
 
             var ready = verified.Items.Count(mail => mail.Ready);
-            var errors = verified.Items.Count(mail => mail.Error != null);
+            var errors = verified.Items.Count(mail => mail.Error != null && !mail.Skipped);
+            var warnings = verified.Items.Count(mail => mail.Skipped);
 
             if (ready == 0)
             {
                 // SendAsync zapisze błędy walidacji do historii i wyśle skonfigurowane alerty,
                 // ale nie wykona SMTP dla żadnej niepoprawnej paczki.
                 await batches.SendAsync(verified, true,
-                    new Progress<string>(text => StatusText.Text = text), cancellationToken);
+                    new Progress<string>(text => StatusText.Text = text), cancellationToken, notifyErrors: false);
                 InvalidatePreview();
-                StatusText.Text = $"Ręczna wysyłka wstrzymana po ponownej weryfikacji: {errors} błędów, 0 poprawnych paczek.";
+                StatusText.Text = errors > 0
+                    ? $"Ręczna wysyłka wstrzymana po ponownej weryfikacji: {errors} błędów, {warnings} ostrzeżeń, 0 poprawnych paczek."
+                    : $"Brak paczek do wysłania: {warnings} ostrzeżeń (np. pusty katalog).";
                 LoadLogs();
                 return;
             }
 
             await batches.SendAsync(verified, true,
-                new Progress<string>(text => StatusText.Text = text), cancellationToken);
+                new Progress<string>(text => StatusText.Text = text), cancellationToken, notifyErrors: false);
 
             InvalidatePreview();
             LoadLogs();
             StatusText.Text = errors == 0
-                ? $"Zakończono ręczną wysyłkę po ponownej weryfikacji: wysłano {ready}."
-                : $"Zakończono ręczną wysyłkę: poprawnych {ready}, błędów {errors}.";
+                ? $"Zakończono ręczną wysyłkę: wysłano {ready}, ostrzeżeń {warnings}."
+                : $"Zakończono ręczną wysyłkę: wysłano {ready}, ostrzeżeń {warnings}, błędów {errors}.";
         });
     }
 
@@ -500,16 +505,134 @@ public partial class MainWindow : Window
         SendButton.IsEnabled = false;
     }
 
-    private void LoadLogs() => LogsGrid.ItemsSource = repository.Logs().Select(log => new
+    private void LoadLogs()
     {
-        LocalTime = log.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
-        log.CustomerName, log.Period, log.Detail,
-        Status = log.Status switch
+        allLogs = repository.Logs().ToList();
+        var selectedCompany = HistoryCompanyFilter?.SelectedItem as string ?? "Wszystkie firmy";
+
+        if (HistoryCompanyFilter != null)
         {
-            DeliveryStatus.Success => "Wysłano", DeliveryStatus.Failed => "Błąd",
-            DeliveryStatus.Uncertain => "Niepewny", DeliveryStatus.Pending => "W toku", _ => "Pominięty"
+            var companies = allLogs.Select(log => log.CustomerName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            loadingHistoryFilters = true;
+            HistoryCompanyFilter.ItemsSource = new[] { "Wszystkie firmy" }.Concat(companies).ToList();
+            HistoryCompanyFilter.SelectedItem = companies.Contains(selectedCompany, StringComparer.CurrentCultureIgnoreCase)
+                ? companies.First(name => name.Equals(selectedCompany, StringComparison.CurrentCultureIgnoreCase))
+                : "Wszystkie firmy";
+            loadingHistoryFilters = false;
         }
-    }).ToList();
+
+        ApplyHistoryFilter();
+    }
+
+    private void ApplyHistoryFilter()
+    {
+        if (LogsGrid == null) return;
+
+        var company = HistoryCompanyFilter?.SelectedItem as string ?? "Wszystkie firmy";
+        var statusIndex = HistoryStatusFilter?.SelectedIndex ?? 0;
+
+        var filtered = allLogs.Where(log =>
+            (company == "Wszystkie firmy" ||
+             log.CustomerName.Equals(company, StringComparison.CurrentCultureIgnoreCase)) &&
+            (statusIndex == 0 ||
+             statusIndex == 1 && HistoryCategory(log.Status) == "Poprawne" ||
+             statusIndex == 2 && HistoryCategory(log.Status) == "Ostrzeżenie" ||
+             statusIndex == 3 && HistoryCategory(log.Status) == "Błąd"))
+            .ToList();
+
+        LogsGrid.ItemsSource = filtered.Select(log => new
+        {
+            log.Id,
+            LocalTime = log.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+            log.CustomerName,
+            log.Period,
+            Status = HistoryStatusText(log.Status),
+            FileCount = log.Status == DeliveryStatus.Success
+                ? log.FileCount?.ToString(CultureInfo.InvariantCulture) ?? "—"
+                : "—",
+            log.Detail
+        }).ToList();
+
+        if (HistoryCountText != null)
+            HistoryCountText.Text = $"Widoczne: {filtered.Count} / {allLogs.Count}";
+    }
+
+    private static string HistoryCategory(DeliveryStatus status) => status switch
+    {
+        DeliveryStatus.Success => "Poprawne",
+        DeliveryStatus.Failed => "Błąd",
+        _ => "Ostrzeżenie"
+    };
+
+    private static string HistoryStatusText(DeliveryStatus status) => status switch
+    {
+        DeliveryStatus.Success => "Poprawne",
+        DeliveryStatus.Failed => "Błąd",
+        DeliveryStatus.Uncertain => "Ostrzeżenie – niepewny",
+        DeliveryStatus.Pending => "Ostrzeżenie – w toku",
+        _ => "Ostrzeżenie"
+    };
+
+    private void HistoryFilterChanged(object senderObject, SelectionChangedEventArgs args)
+    {
+        if (!loadingHistoryFilters) ApplyHistoryFilter();
+    }
+
+    private string SelectedReportCompany()
+    {
+        var company = HistoryCompanyFilter.SelectedItem as string;
+        if (string.IsNullOrWhiteSpace(company) || company == "Wszystkie firmy")
+            throw new UserException("W filtrze historii wybierz konkretną firmę, dla której chcesz wygenerować raport.");
+        return company;
+    }
+
+    private void ExportCompanyReportPdf(object senderObject, RoutedEventArgs args) => Guard(() =>
+    {
+        var company = SelectedReportCompany();
+        var rows = DeliveryReportExporter.SuccessfulForCompany(allLogs, company);
+        if (rows.Count == 0) throw new UserException("Brak poprawnych wysyłek tej firmy do ujęcia w raporcie.");
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Raport wysyłki PDF",
+            Filter = "PDF (*.pdf)|*.pdf",
+            FileName = $"raport-wysylki-{SafeFileName(company)}.pdf",
+            AddExtension = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        DeliveryReportExporter.ExportPdf(dialog.FileName, company, allLogs);
+        StatusText.Text = $"Wygenerowano raport PDF dla firmy {company}.";
+    });
+
+    private void ExportCompanyReportCsv(object senderObject, RoutedEventArgs args) => Guard(() =>
+    {
+        var company = SelectedReportCompany();
+        var rows = DeliveryReportExporter.SuccessfulForCompany(allLogs, company);
+        if (rows.Count == 0) throw new UserException("Brak poprawnych wysyłek tej firmy do ujęcia w raporcie.");
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Raport wysyłki CSV",
+            Filter = "CSV (*.csv)|*.csv",
+            FileName = $"raport-wysylki-{SafeFileName(company)}.csv",
+            AddExtension = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        DeliveryReportExporter.ExportCsv(dialog.FileName, company, allLogs);
+        StatusText.Text = $"Wygenerowano raport CSV dla firmy {company}.";
+    });
+
+    private static string SafeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var result = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(result) ? "firma" : result;
+    }
 
     private async void WindowContentRendered(object? senderObject, EventArgs args)
     {
