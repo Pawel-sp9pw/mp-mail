@@ -403,8 +403,10 @@ public partial class MainWindow : Window
             new Progress<string>(text => StatusText.Text = text), cancellationToken);
         PreviewGrid.ItemsSource = prepared.Items;
         SendButton.IsEnabled = prepared.Items.Any(mail => mail.Ready);
+        var previewErrors = prepared.Items.Count(mail => mail.Error != null && !mail.Skipped);
+        var previewWarnings = prepared.Items.Count(mail => mail.Skipped);
         StatusText.Text = $"Podgląd ręczny po ponownej weryfikacji: {prepared.Items.Count(mail => mail.Ready)} do wysłania, " +
-            $"{prepared.Items.Count(mail => mail.Error != null)} błędów.";
+            $"{previewWarnings} ostrzeżeń, {previewErrors} błędów.";
     });
 
     private void PreviewSelectedMail(object senderObject, SelectionChangedEventArgs args)
@@ -412,7 +414,7 @@ public partial class MainWindow : Window
         if (PreviewGrid.SelectedItem is not PreparedMail mail) return;
         if (!string.IsNullOrWhiteSpace(mail.Error))
         {
-            PreviewSubject.Text = $"Błąd — {mail.Name}";
+            PreviewSubject.Text = mail.Skipped ? $"Ostrzeżenie — {mail.Name}" : $"Błąd — {mail.Name}";
             PreviewBody.Text = mail.Error;
         }
         else
@@ -469,8 +471,8 @@ public partial class MainWindow : Window
 
             if (ready == 0)
             {
-                // SendAsync zapisze błędy walidacji do historii i wyśle skonfigurowane alerty,
-                // ale nie wykona SMTP dla żadnej niepoprawnej paczki.
+                // SendAsync zapisze błędy i ostrzeżenia do historii.
+                // W trybie ręcznym powiadomienia e-mail o błędach są celowo wyłączone.
                 await batches.SendAsync(verified, true,
                     new Progress<string>(text => StatusText.Text = text), cancellationToken, notifyErrors: false);
                 InvalidatePreview();
