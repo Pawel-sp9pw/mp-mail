@@ -8,7 +8,7 @@ public sealed record PreparedMail(Customer Customer, string Period, string Subje
 {
     public string Name => Customer.Name;
     public string Email => Customer.Email;
-    public string Status => Skipped ? "Pominięty: już wysłano / status niepewny" : Error ?? "Gotowy";
+    public string Status => Skipped ? Error ?? "Pominięty: już wysłano / status niepewny" : Error ?? "Gotowy";
     public string ZipSize => ArchiveBytes == 0 ? "—" : $"{ArchiveBytes / 1048576d:F2} MB";
     public int FileCount => Files.Count;
     public bool Ready => Error == null && !Skipped;
