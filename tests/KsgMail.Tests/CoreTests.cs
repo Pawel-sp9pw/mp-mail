@@ -111,6 +111,94 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
+    public async Task EmptyFolderIsWarningAndNeverSendsOrNotifiesInManualMode()
+    {
+        using var workspace = new TestWorkspace();
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+        var settings = workspace.Settings with { ErrorNotificationEmail = "errors@example.test" };
+
+        using var batch = await service.PrepareAsync(
+            [workspace.Customer], settings, "2026-10", true, null, CancellationToken.None);
+
+        var mail = Assert.Single(batch.Items);
+        Assert.True(mail.Skipped);
+        Assert.False(mail.Ready);
+        Assert.Contains("Katalog nie zawiera plików", mail.Status);
+
+        var progress = new CaptureProgress();
+        await service.SendAsync(batch, true, progress, CancellationToken.None, notifyErrors: false);
+
+        Assert.Equal(0, sender.Count);
+        Assert.Equal(0, sender.ErrorNotificationCount);
+        Assert.Contains(progress.Messages, message => message.StartsWith("Sprawdzanie:", StringComparison.Ordinal));
+        Assert.DoesNotContain(progress.Messages, message => message.StartsWith("Wysyłka:", StringComparison.Ordinal));
+        Assert.Equal(DeliveryStatus.Skipped, Assert.Single(workspace.Repository.Logs()).Status);
+    }
+
+    [Fact]
+    public async Task ManualValidationErrorDoesNotSendErrorNotificationButScheduledPathDoes()
+    {
+        using var manualWorkspace = new TestWorkspace();
+        TestPdf.WriteMedicalCertificate(
+            Path.Combine(manualWorkspace.Source, "orzeczenie-profilaktyczne-p1-bad.pdf"), "Inna firma");
+        var manualSender = new RecordingSender();
+        var manualService = new BatchService(manualWorkspace.Repository,
+            new ArchiveService(manualWorkspace.Secrets), manualSender, manualWorkspace.Temp);
+        var settings = manualWorkspace.Settings with { ErrorNotificationEmail = "errors@example.test" };
+
+        using (var manualBatch = await manualService.PrepareAsync(
+                   [manualWorkspace.Customer], settings, "2026-10", true, null, CancellationToken.None))
+        {
+            await manualService.SendAsync(manualBatch, true, null, CancellationToken.None, notifyErrors: false);
+        }
+        Assert.Equal(0, manualSender.ErrorNotificationCount);
+
+        using var scheduledWorkspace = new TestWorkspace();
+        TestPdf.WriteMedicalCertificate(
+            Path.Combine(scheduledWorkspace.Source, "orzeczenie-profilaktyczne-p1-bad.pdf"), "Inna firma");
+        var scheduledSender = new RecordingSender();
+        var scheduledService = new BatchService(scheduledWorkspace.Repository,
+            new ArchiveService(scheduledWorkspace.Secrets), scheduledSender, scheduledWorkspace.Temp);
+        using var scheduledBatch = await scheduledService.PrepareAsync(
+            [scheduledWorkspace.Customer], settings, "2026-10", false, null, CancellationToken.None);
+        await scheduledService.SendAsync(scheduledBatch, false, null, CancellationToken.None);
+        Assert.Equal(1, scheduledSender.ErrorNotificationCount);
+    }
+
+    [Fact]
+    public async Task SuccessfulDeliveryStoresCertificateCountAndReportsExport()
+    {
+        using var workspace = new TestWorkspace();
+        var path = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-report.pdf");
+        TestPdf.WriteMedicalCertificate(path, workspace.Customer.Name);
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        using var batch = await service.PrepareAsync(
+            [workspace.Customer], workspace.Settings, "2026-10", true, null, CancellationToken.None);
+        var progress = new CaptureProgress();
+        await service.SendAsync(batch, true, progress, CancellationToken.None, notifyErrors: false);
+
+        Assert.Contains(progress.Messages, message => message.StartsWith("Sprawdzanie:", StringComparison.Ordinal));
+        Assert.Contains(progress.Messages, message => message.StartsWith("Wysyłka:", StringComparison.Ordinal));
+
+        var log = Assert.Single(workspace.Repository.Logs());
+        Assert.Equal(DeliveryStatus.Success, log.Status);
+        Assert.Equal(1, log.FileCount);
+
+        var csv = Path.Combine(workspace.Root, "report.csv");
+        var pdf = Path.Combine(workspace.Root, "report.pdf");
+        DeliveryReportExporter.ExportCsv(csv, workspace.Customer.Name, workspace.Repository.Logs());
+        DeliveryReportExporter.ExportPdf(pdf, workspace.Customer.Name, workspace.Repository.Logs());
+
+        var csvText = File.ReadAllText(csv);
+        Assert.Contains("liczba_orzeczen", csvText);
+        Assert.Contains(";1;", csvText);
+        Assert.True(new FileInfo(pdf).Length > 500);
+    }
+
+    [Fact]
     public void ErrorNotificationEmailIsOptionalButValidatedWhenProvided()
     {
         using var workspace = new TestWorkspace();
@@ -214,15 +302,13 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
-    public void DiscoverRejectsDirectoryWithoutMatchingMedicalCertificates()
+    public void DiscoverReturnsEmptyWhenNoMedicalCertificatesMatch()
     {
         using var workspace = new TestWorkspace();
         TestPdf.WriteMedicalCertificate(Path.Combine(workspace.Source, "other.pdf"), workspace.Customer.Name);
         var service = new ArchiveService(workspace.Secrets);
 
-        var exception = Assert.Throws<UserException>(() => service.Discover(workspace.Source, 10 * 1048576L));
-
-        Assert.Contains("orzeczenie-profilaktyczne-p1*.pdf", exception.Message);
+        Assert.Empty(service.Discover(workspace.Source, 10 * 1048576L));
     }
 
     [Fact]
@@ -701,6 +787,12 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
         Assert.Equal("NEG.orzeczenie-profilaktyczne-p1*.pdf", legacy.FileRules[1].Pattern);
         Assert.Equal(FileDispatchMode.Interval, legacy.FileRules[1].Mode);
         Assert.Equal(15, legacy.FileRules[1].IntervalMinutes);
+    }
+
+    private sealed class CaptureProgress : IProgress<string>
+    {
+        public List<string> Messages { get; } = [];
+        public void Report(string value) => Messages.Add(value);
     }
 
     private sealed class RecordingSender : IMailSender
