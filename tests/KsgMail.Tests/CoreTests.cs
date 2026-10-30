@@ -71,6 +71,46 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
+    public async Task ManualResendBypassesHistoryBlockAndRevalidatesPdfEveryTime()
+    {
+        using var workspace = new TestWorkspace();
+        var customer = workspace.Customer;
+        workspace.Repository.SaveCustomer(customer);
+        workspace.Repository.Finish(customer, "2026-10", DeliveryStatus.Success, "previously sent", "old-message");
+
+        var path = Path.Combine(workspace.Source, "orzeczenie-profilaktyczne-p1-manual.pdf");
+        TestPdf.WriteMedicalCertificate(path, "Inna firma");
+
+        var sender = new RecordingSender();
+        var service = new BatchService(workspace.Repository, new ArchiveService(workspace.Secrets), sender, workspace.Temp);
+
+        using (var blocked = await service.PrepareAsync(
+                   [customer], workspace.Settings, "2026-10", false, null, CancellationToken.None))
+        {
+            var mail = Assert.Single(blocked.Items);
+            Assert.True(mail.Skipped);
+        }
+
+        using (var revalidated = await service.PrepareAsync(
+                   [customer], workspace.Settings, "2026-10", true, null, CancellationToken.None))
+        {
+            var mail = Assert.Single(revalidated.Items);
+            Assert.False(mail.Skipped);
+            Assert.False(mail.Ready);
+            Assert.Contains("nie zgadza się z firmą w bazie", mail.Error, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        TestPdf.WriteMedicalCertificate(path, customer.Name);
+
+        using var valid = await service.PrepareAsync(
+            [customer], workspace.Settings, "2026-10", true, null, CancellationToken.None);
+
+        var ready = Assert.Single(valid.Items);
+        Assert.True(ready.Ready);
+        Assert.False(ready.Skipped);
+    }
+
+    [Fact]
     public void ErrorNotificationEmailIsOptionalButValidatedWhenProvided()
     {
         using var workspace = new TestWorkspace();
