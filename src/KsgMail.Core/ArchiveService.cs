@@ -90,8 +90,6 @@ public sealed class ArchiveService(ISecretProtector secrets)
             files.Add(new SourceFile(path, fileName, info.Length, info.LastWriteTimeUtc));
             if (files.Count > 10000) throw new UserException("Katalog zawiera ponad 10 000 plików.");
         }
-        if (files.Count == 0)
-            throw new UserException($"Brak plików pasujących do aktywnych reguł grupy „{groupDescription}” bezpośrednio w katalogu firmy. Wiadomość nie zostanie wysłana.");
         return files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToList();
     }
 
