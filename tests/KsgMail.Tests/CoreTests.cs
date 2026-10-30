@@ -23,6 +23,32 @@ na stanowisku
     }
 
     [Fact]
+    public void EmployerFieldStartsAfterDoPracyWAndIgnoresWrappedAddress()
+    {
+        const string text = """
+zatrudniony(-na)/przyjmowany(-na)*) do pracy w
+JSW S.A. KWK KNURÓW-SZCZYGŁOWICE-RUCH SZCZYGŁOWICE, 44-330 JASTRZĘBIE-ZDRóJ, AL. JANA PAWŁA
+II 4
+(nazwa i adres pracodawcy)
+na stanowisku
+""";
+
+        Assert.Equal("JSW S.A. KWK KNURÓW-SZCZYGŁOWICE-RUCH SZCZYGŁOWICE",
+            EmployerPdfValidator.ExtractEmployerNameFromText(text));
+    }
+
+    [Fact]
+    public void EmployerMayStartOnSameLineAsDoPracyW()
+    {
+        const string text = """
+zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
+(nazwa i adres pracodawcy)
+""";
+
+        Assert.Equal("Testowa firma", EmployerPdfValidator.ExtractEmployerNameFromText(text));
+    }
+
+    [Fact]
     public async Task EmployerMismatchBlocksPackageBeforeSmtp()
     {
         using var workspace = new TestWorkspace();
