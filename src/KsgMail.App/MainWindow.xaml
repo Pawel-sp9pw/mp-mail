@@ -8,9 +8,11 @@
   </Grid>
   <Border DockPanel.Dock="Bottom" Background="#E5EDF6" Padding="12" Margin="0,14,0,0">
    <DockPanel><Button x:Name="CancelButton" DockPanel.Dock="Right" Content="Anuluj operację" Click="CancelOperation" IsEnabled="False"/>
-    <ScrollViewer MaxHeight="90" VerticalScrollBarVisibility="Auto">
-     <TextBlock x:Name="StatusText" Text="Gotowy. Uzupełnij SMTP i dodaj firmy." VerticalAlignment="Center" TextWrapping="Wrap"/>
-    </ScrollViewer></DockPanel>
+    <TextBox x:Name="StatusText" Text="Gotowy. Uzupełnij SMTP i dodaj firmy." IsReadOnly="True"
+             MinHeight="42" MaxHeight="140" AcceptsReturn="True" TextWrapping="Wrap"
+             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+             Background="Transparent" BorderThickness="0" VerticalContentAlignment="Center" Padding="0,2,8,2"/>
+   </DockPanel>
   </Border>
   <TabControl x:Name="Tabs">
    <TabItem Header="  Firmy  ">
@@ -170,7 +172,11 @@
       </DataGrid>
       <Grid Grid.Row="1" Margin="0,12,0,0">
        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-       <DockPanel><TextBlock x:Name="PreviewSubject" DockPanel.Dock="Top" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBox x:Name="PreviewBody" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></DockPanel>
+       <DockPanel>
+        <TextBlock x:Name="PreviewSubject" DockPanel.Dock="Top" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <TextBox x:Name="PreviewBody" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+       </DockPanel>
        <DockPanel Grid.Column="2"><TextBlock Text="Pliki w ZIP" DockPanel.Dock="Top" FontWeight="SemiBold"/><ListBox x:Name="PreviewFiles" DisplayMemberPath="RelativePath" Margin="0,5,0,9"/></DockPanel>
       </Grid>
      </Grid>
