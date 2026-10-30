@@ -11,6 +11,7 @@ public static class DeliveryReportExporter
     public static IReadOnlyList<DeliveryLog> SuccessfulForCompany(IEnumerable<DeliveryLog> logs, string companyName) =>
         logs.Where(log =>
                 log.Status == DeliveryStatus.Success &&
+                !string.IsNullOrWhiteSpace(log.MessageId) &&
                 log.CustomerName.Equals(companyName, StringComparison.CurrentCultureIgnoreCase))
             .OrderBy(log => log.Timestamp)
             .ToList();
