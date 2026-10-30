@@ -239,6 +239,23 @@ public sealed class Repository
         command.ExecuteNonQuery();
     }
 
+    public bool HasRecentLog(string customerName, DeliveryStatus status, string detail, DateTimeOffset sinceUtc)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS(
+                SELECT 1 FROM DeliveryLog
+                WHERE CustomerName=$name AND Status=$status AND Detail=$detail AND Timestamp >= $since
+            )
+            """;
+        command.Parameters.AddWithValue("$name", customerName);
+        command.Parameters.AddWithValue("$status", status.ToString());
+        command.Parameters.AddWithValue("$detail", detail);
+        command.Parameters.AddWithValue("$since", sinceUtc.ToString("O", CultureInfo.InvariantCulture));
+        return Convert.ToInt64(command.ExecuteScalar()) != 0;
+    }
+
     public IReadOnlyList<DeliveryLog> Logs(int limit = 1000)
     {
         using var connection = Open();
