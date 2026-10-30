@@ -49,6 +49,22 @@ zatrudniony do pracy w Testowa firma, Testowa 1, 00-001 Warszawa
     }
 
     [Fact]
+    public void EquivalentLegalFormsAreAccepted()
+    {
+        Assert.True(EmployerPdfValidator.CompanyNamesEqual(
+            "ANPACARS SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+            "ANPACARS SP. Z O.O."));
+
+        Assert.True(EmployerPdfValidator.CompanyNamesEqual(
+            "PRZYKŁAD SPÓŁKA AKCYJNA",
+            "PRZYKŁAD S.A."));
+
+        Assert.False(EmployerPdfValidator.CompanyNamesEqual(
+            "ANPACARS SP. Z O.O.",
+            "INNA FIRMA SP. Z O.O."));
+    }
+
+    [Fact]
     public async Task EmployerMismatchBlocksPackageBeforeSmtp()
     {
         using var workspace = new TestWorkspace();
